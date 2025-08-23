@@ -2,7 +2,7 @@
 
 **riptide** est un remplacement _safe_ de `rm` qui déplace vos fichiers dans un **graveyard**
 au lieu de les supprimer définitivement.  
-_MVP v0.2.0 :_ options `--prune`, `--list`, `--resurrect`.
+_MVP v0.3.0 :_ options `--prune`, `--list`, `--resurrect`.
 
 > Emplacement par défaut : `${XDG_DATA_HOME:-~/.local/share}/riptide/graveyard`  
 > Index : `${XDG_DATA_HOME:-~/.local/share}/riptide/index.json`
