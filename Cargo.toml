@@ -1,9 +1,9 @@
 [package]
-name = "riptide"
-version = "0.2.0"
+name = "rip"
+version = "0.3.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-description = "Safe rm with a graveyard (MVP: rm, ls)"
+description = "Safe rm with a graveyard (MVP: rm, ls, prune, resurect)"
 repository = "ssh://git@forgejo.dirty-flix-servarr.fr:2222/Samda/riptide.git"
 
 [dependencies]

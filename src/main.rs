@@ -13,8 +13,6 @@ struct Cli {
     paths: Vec<PathBuf>,
 
     /// Prune graveyard; optional TARGET value allows `-p TARGET`
-    /// - `-p`            -> prune all (with confirmation)
-    /// - `-p TARGET`     -> prune matches for TARGET (basename or id prefix)
     #[arg(
         short = 'p',
         long = "prune",
@@ -25,9 +23,20 @@ struct Cli {
     )]
     prune: Option<Option<String>>, // <- Option<Option<...>>
 
-    /// (optional) explicit target ;
+    /// (optional) explicit target
     #[arg(long = "target", requires = "prune")]
     target: Option<String>,
+
+    /// Resurrect (restore) from graveyard; optional TARGET allows `-r TARGET`
+    #[arg(
+        short = 'r',
+        long = "resurrect",
+        value_name = "TARGET",
+        num_args = 0..=1,
+        action = ArgAction::Set,
+        conflicts_with_all = ["paths", "prune", "target", "list"]
+    )]
+    resurrect: Option<Option<String>>,
 
     #[arg(short = 'l', long = "list")]
     list: bool,
@@ -57,7 +66,17 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // Operations
+    // RESURRECT
+    if let Some(res_opt) = cli.resurrect {
+        let target = match res_opt {
+            Some(t) => Some(t),
+            None => None, // -r sans valeur -> prompt interactif
+        };
+        graveyard::resurrect(target, cli.yes)?;
+        return Ok(());
+    }
+
+    // PRUNE
     if let Some(prune_opt) = cli.prune {
         let target = match (cli.target, prune_opt) {
             (Some(t), _) => Some(t),    // --target prioritaire
@@ -68,6 +87,7 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // LIST
     if cli.list {
         graveyard::list()?;
         return Ok(());

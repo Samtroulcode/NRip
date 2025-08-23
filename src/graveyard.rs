@@ -22,6 +22,162 @@ fn graveyard_dir() -> PathBuf {
     base.join("riptide").join("graveyard")
 }
 
+// ---------- helpers copie/rename ----------
+fn copy_file(src: &Path, dst: &Path) -> anyhow::Result<()> {
+    if let Some(parent) = dst.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::copy(src, dst)?;
+    Ok(())
+}
+
+fn copy_dir_all(src: &Path, dst: &Path) -> anyhow::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_all(&src_path, &dst_path)?;
+        } else if ty.is_file() {
+            copy_file(&src_path, &dst_path)?;
+        } else if ty.is_symlink() {
+            let target = fs::read_link(&src_path)?;
+            std::os::unix::fs::symlink(target, &dst_path)?;
+        }
+    }
+    Ok(())
+}
+
+fn move_across_fs(src: &Path, dst: &Path) -> anyhow::Result<()> {
+    if src.is_dir() {
+        copy_dir_all(src, dst)?;
+        fs::remove_dir_all(src)?;
+    } else {
+        copy_file(src, dst)?;
+        fs::remove_file(src)?;
+    }
+    Ok(())
+}
+
+fn safe_move(src: &Path, dst: &Path) -> anyhow::Result<()> {
+    if let Some(parent) = dst.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    match fs::rename(src, dst) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            // EXDEV (cross-device) -> copie + unlink
+            if e.raw_os_error() == Some(18) {
+                move_across_fs(src, dst)
+            } else {
+                // tente tout de même la voie "copie" s’il y a un autre souci d’atomicité
+                move_across_fs(src, dst)
+            }
+        }
+    }
+}
+// ------------------------------------------
+
+pub fn resurrect(target: Option<String>, yes: bool) -> anyhow::Result<()> {
+    let mut entries = index::load_entries().unwrap_or_default();
+
+    // sélection
+    let chosen: index::Entry = if let Some(q) = target {
+        let q = q.to_lowercase();
+        let mut matches: Vec<index::Entry> = entries
+            .iter()
+            .cloned()
+            .filter(|e| {
+                let base = index::basename_of_original(e).to_lowercase();
+                let id = e.id.as_deref().unwrap_or("").to_lowercase();
+                base.contains(&q) || id.starts_with(&q)
+            })
+            .collect();
+
+        if matches.is_empty() {
+            println!("No graveyard entry matches '{}'.", q);
+            return Ok(());
+        }
+        if matches.len() > 1 && !yes {
+            println!("Multiple matches. Be more specific or pick one:");
+            for (i, m) in matches.iter().enumerate() {
+                let id = m.id.as_deref().unwrap_or("-");
+                println!("{:2}) {:7}  {}", i + 1, id, m.original_path);
+            }
+            return Ok(());
+        }
+        matches.remove(0)
+    } else {
+        // prompt interactif
+        if entries.is_empty() {
+            println!("Graveyard is empty.");
+            return Ok(());
+        }
+        println!("Please select a file/folder or item to resurrect:");
+        for (i, e) in entries.iter().enumerate() {
+            let id = e.id.as_deref().unwrap_or("-");
+            let base = index::basename_of_original(e);
+            println!("{:2}) {:7}  {}  ({})", i + 1, id, base, e.original_path);
+        }
+        print!("Enter number (0 to cancel): ");
+        io::stdout().flush()?;
+        let mut buf = String::new();
+        io::stdin().read_line(&mut buf)?;
+        let sel: usize = buf.trim().parse().unwrap_or(0);
+        if sel == 0 || sel > entries.len() {
+            println!("Aborted.");
+            return Ok(());
+        }
+        entries[sel - 1].clone()
+    };
+
+    let src = PathBuf::from(&chosen.stored_path);
+    let mut dst = PathBuf::from(&chosen.original_path);
+
+    if !src.exists() {
+        eprintln!("Stored item not found: {}", src.display());
+        // Purge de l’entrée orpheline
+        entries.retain(|e| e.stored_path != chosen.stored_path);
+        index::save_entries(&entries)?;
+        return Ok(());
+    }
+
+    // collision à destination
+    if dst.exists() {
+        if !yes {
+            print!("Destination exists: {}. Overwrite? [y/N]: ", dst.display());
+            io::stdout().flush()?;
+            let mut ans = String::new();
+            io::stdin().read_line(&mut ans)?;
+            if ans.trim().to_lowercase() != "y" {
+                // suffixe .restored (ou avec id)
+                let base = dst
+                    .file_name()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "restored".into());
+                let mut alt = dst.clone();
+                let id = chosen.id.as_deref().unwrap_or("restored");
+                let suffixed = format!("{}.{}.restored", base, id);
+                alt.set_file_name(suffixed);
+                println!("Restoring to alternative path: {}", alt.display());
+                dst = alt;
+            }
+        }
+    }
+
+    // move (rename ou copie+unlink)
+    safe_move(&src, &dst)?;
+
+    // MAJ index: retire l’entrée
+    entries.retain(|e| e.stored_path != chosen.stored_path);
+    index::save_entries(&entries)?;
+
+    println!("Resurrected -> {}", dst.display());
+    Ok(())
+}
+
 pub fn bury(paths: Vec<PathBuf>) -> anyhow::Result<()> {
     let gy = graveyard_dir();
     fs::create_dir_all(&gy)?;
