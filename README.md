@@ -1,4 +1,4 @@
-# riptide (v0.1.0)
+# riptide (v0.2.0)
 
 **riptide** est un remplacement _safe_ de `rm` qui déplace vos fichiers dans un **graveyard**
 au lieu de les supprimer définitivement.  
