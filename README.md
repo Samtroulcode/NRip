@@ -1,15 +1,15 @@
 # riptide (v0.3.0)
 
-**riptide** est un remplacement _safe_ de `rm` qui déplace vos fichiers dans un **graveyard**
-au lieu de les supprimer définitivement.  
-_MVP v0.3.0 :_ options `--prune`, `--list`, `--resurrect`.
+***riptide*** is a *safe* replacement for `rm` that moves your files to a **graveyard**
+instead of deleting them permanently.
+*MVP v0.3.0 :* options `--prune`, `--list`, `--resurrect`.
 
-> Emplacement par défaut : `${XDG_DATA_HOME:-~/.local/share}/riptide/graveyard`  
+> Default folder : `${XDG_DATA_HOME:-~/.local/share}/riptide/graveyard`  
 > Index : `${XDG_DATA_HOME:-~/.local/share}/riptide/index.json`
 
 ## Installation
 
-### Depuis la source
+### From source
 
 ```bash
 git clone ssh://git@forgejo.dirty-flix-servarr.fr:2222/Samda/riptide.git
@@ -18,48 +18,48 @@ cargo install --path .
 # binaire dans ~/.cargo/bin/riptide
 ```
 
-### Build local
+### Local build
 
 ```bash
 cargo build --release
 ./target/release/riptide --help
 ```
 
-## Usage
+## Use
 
-`rip` : déplace les fichiers dans le graveyard.
+`rip` : move files to the graveyard. (default action)
 
 ```bash
-rip fichier1 fichier2
+rip file1 file2
 ```
 
-`--list (-l)` : liste les fichiers dans le graveyard.
+`--list (-l)` : list files in the graveyard.
 
 ```bash
 rip -l
 ```
 
-`-p <target>` : prune le graveyard (supprime définitivement les fichiers) ou target. (--prune)
+`-p <target>` : graveyard pruning (permanent deletion). (--prune)
 
 ```bash
-rip -p # supprime tout le graveyard
-rip -p monfichier # supprime monfichier du graveyard
+rip -p # graveyard pruning (permanent deletion) of all files
+rip -p file # prune (permanently delete) specific file from graveyard
 ```
 
-`-r <target>` : ressuscite (restaure) un fichier du graveyard. (--resurrect)
+`-r <target>` : resurrect (restore) files from the graveyard. (--resurrect)
 
 ```bash
-rip -r fichier1 fichier2
-rip -r # liste les fichiers disponibles pour la résurrection
+rip -r file1 file2
+rip -r # list files available for resurrection
 ```
 
-`--help (-h)` : affiche l'aide.
+`--help (-h)` : display help.
 
 ```bash
 rip -h
 ```
 
-`--version (-v)` : affiche la version.
+`--version (-v)` : display version.
 
 ```bash
 rip -v
