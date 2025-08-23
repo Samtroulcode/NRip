@@ -12,7 +12,7 @@ instead of deleting them permanently.
 ### From source
 
 ```bash
-git clone ssh://git@forgejo.dirty-flix-servarr.fr:2222/Samda/riptide.git
+git clone https://forgejo.dirty-flix-servarr.fr/Samda/riptide.git
 cd riptide
 cargo install --path .
 # binaire dans ~/.cargo/bin/riptide
