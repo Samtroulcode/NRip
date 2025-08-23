@@ -9,6 +9,14 @@ instead of deleting them permanently.
 
 ## Installation
 
+### From Arch User Repository (AUR)
+
+```bash
+yay -S riptide
+# or 
+paru -S riptide
+```
+
 ### From source
 
 ```bash
