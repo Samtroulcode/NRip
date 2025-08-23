@@ -2,6 +2,9 @@
 name = "riptide"
 version = "0.1.0"
 edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Safe rm with a graveyard (MVP: rm, ls)"
+repository = "ssh://git@forgejo.dirty-flix-servarr.fr:2222/Samda/riptide.git"
 
 [dependencies]
 anyhow = "1.0.99"
