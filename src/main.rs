@@ -58,10 +58,13 @@ fn main() -> anyhow::Result<()> {
     if !cli.__complete.is_empty() {
         let context = cli.__complete[0].as_str();
         let prefix = cli.__complete.get(1).map(|s| s.as_str());
-        if context == "prune" {
-            for s in graveyard::completion_candidates(prefix)? {
-                println!("{s}");
+        match context {
+            "prune" | "resurrect" => {
+                for s in graveyard::completion_candidates(prefix)? {
+                    println!("{s}");
+                }
             }
+            _ => {}
         }
         return Ok(());
     }
@@ -105,4 +108,3 @@ fn main() -> anyhow::Result<()> {
     println!();
     Ok(())
 }
-

@@ -1,8 +1,8 @@
-# riptide (v0.3.0)
+# riptide (v0.5.0)
 
 ***riptide*** is a *safe* replacement for `rm` that moves your files to a **graveyard**
 instead of deleting them permanently.
-*MVP v0.3.0 :* options `--prune`, `--list`, `--resurrect`.
+*MVP v0.5.0 :* options `--prune`, `--list`, `--resurrect` and autocompletion feature.
 
 > Default folder : `${XDG_DATA_HOME:-~/.local/share}/riptide/graveyard`  
 > Index : `${XDG_DATA_HOME:-~/.local/share}/riptide/index.json`
@@ -42,7 +42,7 @@ rip -l
 `-p <target>` : graveyard pruning (permanent deletion). (--prune)
 
 ```bash
-rip -p # graveyard pruning (permanent deletion) of all files
+rip -p # interactive pruning of files in the graveyard
 rip -p file # prune (permanently delete) specific file from graveyard
 ```
 
@@ -50,7 +50,7 @@ rip -p file # prune (permanently delete) specific file from graveyard
 
 ```bash
 rip -r file1 file2
-rip -r # list files available for resurrection
+rip -r # interactive resurrection of files in the graveyard
 ```
 
 `--help (-h)` : display help.
@@ -63,4 +63,26 @@ rip -h
 
 ```bash
 rip -v
+```
+
+## Bash and Zsh completion
+
+To activate bash completion, add the following line to your `.bashrc` or `.zshrc` file:
+
+```bash
+_rip_complete() {
+  local cur prev cmd
+  cur=${words[-1]}
+  prev=${words[-2]}
+
+  if [[ $prev == "-p" || $prev == "--prune" ]]; then
+    compadd -- ${(f)"$(rip --__complete prune "$cur")"}
+    return 0
+  elif [[ $prev == "-r" || $prev == "--resurrect" ]]; then
+    compadd -- ${(f)"$(rip --__complete resurrect "$cur")"}
+    return 0
+  fi
+  return 1
+}
+compdef _rip_complete rip
 ```

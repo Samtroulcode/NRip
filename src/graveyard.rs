@@ -209,26 +209,26 @@ pub fn list() -> anyhow::Result<()> {
 pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result<()> {
     let mut entries = index::load_entries().unwrap_or_default();
 
-    // Sélection (NE PAS déplacer `target`)
-    let to_delete: Vec<index::Entry> = if let Some(ref q) = target {
-        let q_lc = q.to_lowercase();
-        let matches: Vec<index::Entry> = entries
+    // 1) Construire la liste à supprimer (to_delete)
+    let to_delete: Vec<index::Entry> = if let Some(ref q0) = target {
+        let q = q0.to_lowercase();
+        let mut matches: Vec<index::Entry> = entries
             .iter()
             .cloned()
             .filter(|e| {
                 let base = index::basename_of_original(e).to_lowercase();
                 let id = e.id.as_deref().unwrap_or("").to_lowercase();
-                base.contains(&q_lc) || id.starts_with(&q_lc)
+                base.contains(&q) || id.starts_with(&q)
             })
             .collect();
 
         if matches.is_empty() {
-            println!("No graveyard entry matches '{}'.", q);
+            println!("No graveyard entry matches '{}'.", q0);
             return Ok(());
         }
-        // Si plusieurs et pas -y, on affiche et on abandonne (autocomplétion fera le tri)
+        // Plusieurs résultats sans -y : afficher et sortir (l'auto-complétion aidera)
         if matches.len() > 1 && !yes {
-            println!("Multiple matches (use TAB completion or add -y to prune all):");
+            println!("Multiple matches (use TAB completion or add -y to prune all of them):");
             for m in &matches {
                 let id = m.id.as_deref().unwrap_or("-");
                 println!("  {:7}  {}", id, index::basename_of_original(m));
@@ -237,22 +237,49 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
         }
         matches
     } else {
-        // prune total
-        entries.clone()
+        // --- MODE INTERACTIF ---
+        if entries.is_empty() {
+            println!("Graveyard is empty.");
+            return Ok(());
+        }
+        println!("Select an item to delete or choose 0) ALL:");
+        println!("  0) ALL");
+        for (i, e) in entries.iter().enumerate() {
+            let id = e.id.as_deref().unwrap_or("-");
+            let base = index::basename_of_original(e);
+            println!("{:3}) {:7}  {}  ({})", i + 1, id, base, e.original_path);
+        }
+        print!("Choice [0=ALL, q=cancel]: ");
+        io::stdout().flush()?;
+        let mut buf = String::new();
+        io::stdin().read_line(&mut buf)?;
+        let s = buf.trim().to_lowercase();
+        if s == "q" || s.is_empty() {
+            println!("Aborted.");
+            return Ok(());
+        }
+        if s == "0" {
+            entries.clone() // ALL
+        } else {
+            let sel: usize = s.parse().unwrap_or(usize::MAX);
+            if sel == 0 || sel > entries.len() {
+                println!("Invalid choice.");
+                return Ok(());
+            }
+            vec![entries[sel - 1].clone()]
+        }
     };
 
-    let is_all = target.is_none(); // ✅ on peut l'utiliser, on n'a pas déplacé `target`
-
-    // Bilan
-    let mut count = 0usize;
+    // 2) Bilan et confirmations
     let mut total_bytes: u64 = 0;
     for e in &to_delete {
-        if let Ok(meta) = std::fs::metadata(&e.stored_path) {
+        if let Ok(meta) = fs::metadata(&e.stored_path) {
             total_bytes = total_bytes.saturating_add(meta.len());
         }
     }
     let mb = (total_bytes as f64) / (1024.0 * 1024.0);
 
+    let is_all = to_delete.len() == entries.len();
     if is_all {
         println!(
             "About to remove ALL graveyard items: {} items (~{:.2} MiB)",
@@ -265,9 +292,9 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
         }
         if !yes {
             print!("Type YES to confirm: ");
-            std::io::stdout().flush()?;
+            io::stdout().flush()?;
             let mut buf = String::new();
-            std::io::stdin().read_line(&mut buf)?;
+            io::stdin().read_line(&mut buf)?;
             if buf.trim() != "YES" {
                 println!("Aborted.");
                 return Ok(());
@@ -285,9 +312,9 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
         }
         if !yes && to_delete.len() == 1 {
             print!("Confirm (y/N): ");
-            std::io::stdout().flush()?;
+            io::stdout().flush()?;
             let mut buf = String::new();
-            std::io::stdin().read_line(&mut buf)?;
+            io::stdin().read_line(&mut buf)?;
             if buf.trim().to_lowercase() != "y" {
                 println!("Aborted.");
                 return Ok(());
@@ -295,39 +322,39 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
         }
     }
 
-    // Suppression des fichiers/dirs
+    // 3) Suppression des fichiers/dirs
+    let mut removed = 0usize;
     for e in &to_delete {
-        let p = std::path::Path::new(&e.stored_path);
+        let p = Path::new(&e.stored_path);
         let res = if p.is_dir() {
-            std::fs::remove_dir_all(p)
+            fs::remove_dir_all(p)
         } else {
-            std::fs::remove_file(p).or_else(|err| {
+            fs::remove_file(p).or_else(|err| {
                 if err.kind() == std::io::ErrorKind::IsADirectory {
-                    std::fs::remove_dir_all(p)
+                    fs::remove_dir_all(p)
                 } else {
                     Err(err)
                 }
             })
         };
         match res {
-            Ok(_) => count += 1,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => count += 1,
+            Ok(_) => removed += 1,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => removed += 1,
             Err(err) => eprintln!("warn: cannot remove {}: {}", p.display(), err),
         }
     }
 
-    // Mise à jour de l’index
+    // 4) Mise à jour de l’index + nettoyage dossier
     if is_all {
         index::save_entries(&Vec::new())?;
-        // Nettoyage best-effort du dossier (⚠ remplacer `.flatten()` par `filter_map(Result::ok)`)
         let gy = graveyard_dir();
-        if let Ok(rd) = std::fs::read_dir(&gy) {
+        if let Ok(rd) = fs::read_dir(&gy) {
             for ent in rd.filter_map(|r| r.ok()) {
                 let p = ent.path();
                 let _ = if p.is_dir() {
-                    std::fs::remove_dir_all(&p)
+                    fs::remove_dir_all(&p)
                 } else {
-                    std::fs::remove_file(&p)
+                    fs::remove_file(&p)
                 };
             }
         }
@@ -338,7 +365,7 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
         index::save_entries(&entries)?;
     }
 
-    println!("Removed {} item(s).", count);
+    println!("Removed {} item(s).", removed);
     Ok(())
 }
 
