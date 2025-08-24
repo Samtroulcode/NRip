@@ -15,17 +15,6 @@ use rand::{Rng, rng}; // rand 0.9
 
 use crate::index; // pour appeler les shims
 
-pub fn short_id() -> String {
-    const ALPH: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-    let mut r = rng();
-    (0..7)
-        .map(|_| {
-            let i = r.random_range(0..ALPH.len());
-            ALPH[i] as char
-        })
-        .collect()
-}
-
 fn display_id(e: &index::Entry) -> String {
     e.trashed_path
         .file_name()
@@ -54,64 +43,6 @@ fn append_journal(line: &str) -> Result<()> {
     f.sync_all()?;
     Ok(())
 }
-
-// ---------- helpers copie/rename ----------
-fn copy_file(src: &Path, dst: &Path) -> anyhow::Result<()> {
-    if let Some(parent) = dst.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::copy(src, dst)?;
-    Ok(())
-}
-
-fn copy_dir_all(src: &Path, dst: &Path) -> anyhow::Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-        if ty.is_dir() {
-            copy_dir_all(&src_path, &dst_path)?;
-        } else if ty.is_file() {
-            copy_file(&src_path, &dst_path)?;
-        } else if ty.is_symlink() {
-            let target = fs::read_link(&src_path)?;
-            std::os::unix::fs::symlink(target, &dst_path)?;
-        }
-    }
-    Ok(())
-}
-
-fn move_across_fs(src: &Path, dst: &Path) -> anyhow::Result<()> {
-    if src.is_dir() {
-        copy_dir_all(src, dst)?;
-        fs::remove_dir_all(src)?;
-    } else {
-        copy_file(src, dst)?;
-        fs::remove_file(src)?;
-    }
-    Ok(())
-}
-
-fn safe_move(src: &Path, dst: &Path) -> anyhow::Result<()> {
-    if let Some(parent) = dst.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    match fs::rename(src, dst) {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            // EXDEV (cross-device) -> copie + unlink
-            if e.raw_os_error() == Some(18) {
-                move_across_fs(src, dst)
-            } else {
-                // tente tout de même la voie "copie" s’il y a un autre souci d’atomicité
-                move_across_fs(src, dst)
-            }
-        }
-    }
-}
-// ------------------------------------------
 
 pub fn resurrect(items: &[PathBuf]) -> Result<()> {
     // items : chemins dans la graveyard (ou bien indices depuis l’index)
@@ -215,7 +146,7 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
     let to_delete: Vec<index::Entry> = if let Some(ref q0) = target {
         let q = q0.to_lowercase();
 
-        let mut matches: Vec<index::Entry> = entries
+        let matches: Vec<index::Entry> = entries
             .iter()
             .cloned()
             .filter(|e| {
