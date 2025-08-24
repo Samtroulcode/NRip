@@ -38,12 +38,14 @@ struct Cli {
     )]
     resurrect: Option<Option<String>>,
 
+    /// List graveyard contents
     #[arg(short = 'l', long = "list")]
     list: bool,
 
     #[arg(long)]
     dry_run: bool,
 
+    /// (optional) skip confirmation prompts
     #[arg(short = 'y', long)]
     yes: bool,
 
