@@ -1,11 +1,11 @@
 [package]
 name = "nrip"
-version = "0.7.2"
+version = "0.7.3"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Safe rm with a graveyard (MVP: rm, ls, prune, resurrect)"
-repository = "https://forgejo.dirty-flix-servarr.fr:2222/Samda/riptide.git"
-homepage = "https://github.com/Samtroulcode/riptide"
+repository = "https://forgejo.dirty-flix-servarr.fr:2222/Samda/NRip.git"
+homepage = "https://github.com/Samtroulcode/NRip"
 keywords = ["cli", "rm", "safe", "trash"]
 categories = ["command-line-utilities"]
 
