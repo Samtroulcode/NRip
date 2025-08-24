@@ -96,3 +96,4 @@ pub fn basename_of_original(e: &Entry) -> String {
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default()
 }
+

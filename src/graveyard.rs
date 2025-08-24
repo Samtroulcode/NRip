@@ -11,7 +11,6 @@ use std::ffi::OsString;
 
 use crate::fs_safemove::safe_move_unique;
 use crate::index::{load_index, save_index};
-use rand::{Rng, rng}; // rand 0.9
 
 use crate::index; // pour appeler les shims
 
