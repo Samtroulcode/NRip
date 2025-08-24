@@ -74,14 +74,11 @@ fn main() -> anyhow::Result<()> {
     }
 
     // RESURRECT
-    if let Some(_res_opt) = cli.resurrect {
-        match &cli.target {
-            Some(s) => {
-                let v = vec![PathBuf::from(s)];
-                graveyard::resurrect(&v)?; // slice OK
-            }
-            None => { /* TODO: comportement quand -r sans target */ }
-        }
+    if let Some(res_opt) = cli.resurrect {
+        // res_opt est déjà un Option<String> : None => interactif ; Some(s) => match par s
+        let target = res_opt;
+        graveyard::resurrect_cmd(target, cli.dry_run, cli.yes)?;
+        return Ok(());
     }
 
     // PRUNE

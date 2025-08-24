@@ -96,6 +96,132 @@ pub fn resurrect(items: &[PathBuf]) -> Result<()> {
     Ok(())
 }
 
+pub fn resurrect_cmd(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result<()> {
+    use std::io::{self, Write};
+
+    let entries = index::load_entries().unwrap_or_default();
+
+    // 1) Construire la sélection (to_restore) comme pour prune
+    let to_restore: Vec<index::Entry> = if let Some(ref q0) = target {
+        let q = q0.to_lowercase();
+
+        let matches: Vec<index::Entry> = entries
+            .iter()
+            .cloned()
+            .filter(|e| {
+                let base = index::basename_of_original(e).to_lowercase();
+                let id = display_id(e).to_lowercase(); // id dérivé
+                base.contains(&q) || id.starts_with(&q)
+            })
+            .collect();
+
+        if matches.is_empty() {
+            println!("No graveyard entry matches '{}'.", q0);
+            return Ok(());
+        }
+        if matches.len() > 1 && !yes {
+            println!("Multiple matches (use TAB completion or add -y to restore all of them):");
+            for m in &matches {
+                let id = display_id(m);
+                println!("  {:7}  {}", id, index::basename_of_original(m));
+            }
+            return Ok(());
+        }
+        matches
+    } else {
+        // --- MODE INTERACTIF (symétrique à prune) ---
+        if entries.is_empty() {
+            println!("Graveyard is empty.");
+            return Ok(());
+        }
+        println!("Select an item to restore or choose 0) ALL:");
+        println!("  0) ALL");
+        for (i, e) in entries.iter().enumerate() {
+            let id = display_id(e);
+            let base = index::basename_of_original(e);
+            println!(
+                "{:3}) {:7}  {}  ({})",
+                i + 1,
+                id,
+                base,
+                e.original_path.display()
+            );
+        }
+        print!("Choice [0=ALL, q=cancel]: ");
+        io::stdout().flush()?;
+        let mut buf = String::new();
+        io::stdin().read_line(&mut buf)?;
+        let s = buf.trim().to_lowercase();
+        if s == "q" || s.is_empty() {
+            println!("Aborted.");
+            return Ok(());
+        }
+        if s == "0" {
+            entries.clone() // ALL
+        } else {
+            let sel: usize = s.parse().unwrap_or(usize::MAX);
+            if sel == 0 || sel > entries.len() {
+                println!("Invalid choice.");
+                return Ok(());
+            }
+            vec![entries[sel - 1].clone()]
+        }
+    };
+
+    // 2) Bilan & confirmations
+    // (on peut estimer la taille à réécrire, mais ici on se contente du nombre)
+    let is_all = to_restore.len() == entries.len();
+    if is_all {
+        println!(
+            "About to restore ALL graveyard items: {} item(s).",
+            to_restore.len()
+        );
+        if dry_run {
+            println!("--dry-run: nothing restored.");
+            return Ok(());
+        }
+        if !yes {
+            print!("Type YES to confirm: ");
+            io::stdout().flush()?;
+            let mut buf = String::new();
+            io::stdin().read_line(&mut buf)?;
+            if buf.trim() != "YES" {
+                println!("Aborted.");
+                return Ok(());
+            }
+        }
+    } else {
+        println!("About to restore {} item(s).", to_restore.len());
+        if dry_run {
+            println!("--dry-run: nothing restored.");
+            return Ok(());
+        }
+        if !yes && to_restore.len() == 1 {
+            print!("Confirm (y/N): ");
+            io::stdout().flush()?;
+            let mut buf = String::new();
+            io::stdin().read_line(&mut buf)?;
+            if buf.trim().to_lowercase() != "y" {
+                println!("Aborted.");
+                return Ok(());
+            }
+        }
+    }
+
+    // 3) Exécution
+    let paths: Vec<PathBuf> = to_restore.iter().map(|e| e.trashed_path.clone()).collect();
+    if paths.is_empty() {
+        println!("Nothing to restore.");
+        return Ok(());
+    }
+
+    // On réutilise ta fonction existante (journal, checks, msg "Restored to ...")
+    resurrect(&paths)?;
+
+    println!("Restored {} item(s).", paths.len());
+    Ok(())
+}
+
 pub fn bury(paths: &[PathBuf]) -> Result<()> {
     let gy = graveyard_dir()?;
     let mut idx = load_index()?;

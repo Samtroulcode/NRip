@@ -4,7 +4,7 @@
 instead of deleting them permanently.
 
 This project is inspired by [rip](https://github.com/nivekuil/rip), this is why the binary name is `nrip` (new rip).
-*MVP v0.6.5 :* options `--prune`, `--list`, `--resurrect` and autocompletion feature.
+*MVP v0.7.0 :* options `--prune`, `--list`, `--resurrect` and autocompletion feature.
 
 > Default folder : `${XDG_DATA_HOME:-~/.local/share}/riptide/graveyard`  
 > Index : `${XDG_DATA_HOME:-~/.local/share}/riptide/index.json`
