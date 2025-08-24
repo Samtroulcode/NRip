@@ -397,7 +397,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "riptide"
+name = "riptide-cli"
 version = "0.6.2"
 dependencies = [
  "anyhow",
