@@ -2,7 +2,7 @@
 
 ***riptide*** is a *safe* replacement for `rm` that moves your files to a **graveyard**
 instead of deleting them permanently.
-*MVP v0.6.4 :* options `--prune`, `--list`, `--resurrect` and autocompletion feature.
+*MVP v0.6.5 :* options `--prune`, `--list`, `--resurrect` and autocompletion feature.
 
 > Default folder : `${XDG_DATA_HOME:-~/.local/share}/riptide/graveyard`  
 > Index : `${XDG_DATA_HOME:-~/.local/share}/riptide/index.json`
@@ -12,15 +12,15 @@ instead of deleting them permanently.
 ### From Arch User Repository (AUR)
 
 ```bash
-yay -S riptide
+yay -S nrip
 # or 
-paru -S riptide
+paru -S nrip
 ```
 
 ### From cargo (Rust package manager)
 
 ```bash
-cargo install riptide-cli
+cargo install nrip
 ```
 
 ### From source
@@ -29,7 +29,7 @@ cargo install riptide-cli
 git clone https://forgejo.dirty-flix-servarr.fr/Samda/riptide.git
 cd riptide
 cargo install --path .
-# binaire dans ~/.cargo/bin/riptide
+# binaire dans ~/.cargo/bin/nrip
 ```
 
 ### Local build
@@ -46,7 +46,7 @@ The default location of the graveyard is `${XDG_DATA_HOME:-~/.local/share}/ripti
 ```bash
 Safe rm with a graveyard
 
-Usage: rip [OPTIONS] [PATHS]...
+Usage: nrip [OPTIONS] [PATHS]...
 
 Arguments:
   [PATHS]...  Files/dirs to remove (default action)
@@ -65,39 +65,39 @@ Options:
 `rip` : move files to the graveyard. (default action)
 
 ```bash
-rip file1 file2
+nrip file1 file2
 ```
 
 `--list (-l)` : list files in the graveyard.
 
 ```bash
-rip -l
+nrip -l
 ```
 
 `-p <target>` : graveyard pruning (permanent deletion). (--prune)
 
 ```bash
-rip -p # interactive pruning of files in the graveyard
-rip -p file # prune (permanently delete) specific file from graveyard
+nrip -p # interactive pruning of files in the graveyard
+nrip -p file # prune (permanently delete) specific file from graveyard
 ```
 
 `-r <target>` : resurrect (restore) files from the graveyard. (--resurrect)
 
 ```bash
-rip -r file1 file2
-rip -r # interactive resurrection of files in the graveyard
+nrip -r file1 file2
+nrip -r # interactive resurrection of files in the graveyard
 ```
 
 `--help (-h)` : display help.
 
 ```bash
-rip -h
+nrip -h
 ```
 
 `--version (-v)` : display version.
 
 ```bash
-rip -v
+nrip -v
 ```
 
 ## Bash and Zsh completion
@@ -111,13 +111,13 @@ _rip_complete() {
   prev=${words[-2]}
 
   if [[ $prev == "-p" || $prev == "--prune" ]]; then
-    compadd -- ${(f)"$(rip --__complete prune "$cur")"}
+    compadd -- ${(f)"$(nrip --__complete prune "$cur")"}
     return 0
   elif [[ $prev == "-r" || $prev == "--resurrect" ]]; then
-    compadd -- ${(f)"$(rip --__complete resurrect "$cur")"}
+    compadd -- ${(f)"$(nrip --__complete resurrect "$cur")"}
     return 0
   fi
   return 1
 }
-compdef _rip_complete rip
+compdef _rip_complete nrip
 ```

@@ -297,6 +297,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
 
 [[package]]
+name = "nrip"
+version = "0.6.5"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "dirs",
+ "rand",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -394,19 +407,6 @@ dependencies = [
  "getrandom 0.2.16",
  "libredox",
  "thiserror",
-]
-
-[[package]]
-name = "riptide-cli"
-version = "0.6.4"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "dirs",
- "rand",
- "serde",
- "serde_json",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 [package]
-name = "riptide-cli"
-version = "0.6.4"
+name = "nrip"
+version = "0.6.5"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Safe rm with a graveyard (MVP: rm, ls, prune, resurrect)"

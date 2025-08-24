@@ -6,7 +6,7 @@ mod graveyard;
 mod index;
 
 #[derive(Parser)]
-#[command(name = "rip", version, about = "Safe rm with a graveyard")]
+#[command(name = "nrip", version, about = "Safe rm with a graveyard")]
 struct Cli {
     /// Files/dirs to remove (default action)
     #[arg(value_name = "PATHS")]
