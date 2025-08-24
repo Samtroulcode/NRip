@@ -17,6 +17,12 @@ yay -S riptide
 paru -S riptide
 ```
 
+### From cargo (Rust package manager)
+
+```bash
+cargo install riptide
+```
+
 ### From source
 
 ```bash
