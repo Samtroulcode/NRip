@@ -41,6 +41,27 @@ cargo build --release
 
 ## Use
 
+The default location of the graveyard is `${XDG_DATA_HOME:-~/.local/share}/riptide/graveyard`.
+
+```bash
+Safe rm with a graveyard
+
+Usage: rip [OPTIONS] [PATHS]...
+
+Arguments:
+  [PATHS]...  Files/dirs to remove (default action)
+
+Options:
+  -p, --prune [<TARGET>]      Prune graveyard; optional TARGET value allows `-p TARGET`
+      --target <TARGET>       (optional) explicit target
+  -r, --resurrect [<TARGET>]  Resurrect (restore) from graveyard; optional TARGET allows `-r TARGET`
+  -l, --list                  List graveyard contents
+      --dry-run
+  -y, --yes                   (optional) skip confirmation prompts
+  -h, --help                  Print help
+  -V, --version               Print version
+```
+
 `rip` : move files to the graveyard. (default action)
 
 ```bash
