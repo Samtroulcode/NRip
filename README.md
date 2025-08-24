@@ -1,7 +1,9 @@
-# riptide
+# Nrip
 
-***riptide*** is a *safe* replacement for `rm` that moves your files to a **graveyard**
+***nrip*** is a *safe* replacement for `rm` that moves your files to a **graveyard**
 instead of deleting them permanently.
+
+This project is inspired by [rip](https://github.com/nivekuil/rip), this is why the binary name is `nrip` (new rip).
 *MVP v0.6.5 :* options `--prune`, `--list`, `--resurrect` and autocompletion feature.
 
 > Default folder : `${XDG_DATA_HOME:-~/.local/share}/riptide/graveyard`  
@@ -12,9 +14,9 @@ instead of deleting them permanently.
 ### From Arch User Repository (AUR)
 
 ```bash
-yay -S nrip
+yay -S riptide
 # or 
-paru -S nrip
+paru -S riptide
 ```
 
 ### From cargo (Rust package manager)
