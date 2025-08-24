@@ -1,4 +1,5 @@
 use std::io::{self, Write};
+use std::path;
 use std::path::{Path, PathBuf};
 
 use crate::index::Entry;
@@ -227,22 +228,35 @@ pub fn bury(paths: &[PathBuf]) -> Result<()> {
     let mut idx = load_index()?;
 
     for src in paths {
+        // 1) Capture l’ABSOLU LOGIQUE AVANT le move (ne résout pas les symlinks)
+        let original_abs =
+            path::absolute(src).with_context(|| format!("absolutize {}", src.display()))?;
+
+        // 2) Journal: garde la trace claire
         let base: OsString = src.file_name().unwrap_or_default().to_os_string();
         append_journal(&format!(
             "PENDING\t{}\t{}",
-            src.display(),
+            original_abs.display(),
             base.to_string_lossy()
         ))?;
+
+        // 3) Move vers le graveyard
         let dst = safe_move_unique(src, &gy, &base)
             .with_context(|| format!("move {} -> graveyard", src.display()))?;
-        append_journal(&format!("DONE\t{}\t{}", src.display(), dst.display()))?;
+        append_journal(&format!(
+            "DONE\t{}\t{}",
+            original_abs.display(),
+            dst.display()
+        ))?;
 
+        // 4) Indexe avec le chemin ABSOLU
         idx.items.push(Entry {
-            original_path: src.clone(),
+            original_path: original_abs,
             trashed_path: dst.clone(),
             deleted_at: Utc::now().timestamp(),
         });
     }
+
     save_index(&idx)?;
     Ok(())
 }
