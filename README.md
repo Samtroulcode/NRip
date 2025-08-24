@@ -1,25 +1,29 @@
-# Nrip
+# NRip
 
-***nrip*** is a *safe* replacement for `rm` that moves your files to a **graveyard**
-instead of deleting them permanently.
+**NRip** is a *safe* replacement for `rm`: instead of permanently deleting files, it moves them to a **graveyard** from which you can **list**, **prune** (permanently delete), or **resurrect** (restore).
 
-This project is inspired by [rip](https://github.com/nivekuil/rip), this is why the binary name is `nrip` (new rip).
-*MVP v0.7.0 :* options `--prune`, `--list`, `--resurrect` and autocompletion feature.
+Inspired by [rip](https://github.com/nivekuil/rip) — hence the binary name `nrip` (new rip).
 
-> Default folder : `${XDG_DATA_HOME:-~/.local/share}/riptide/graveyard`  
-> Index : `${XDG_DATA_HOME:-~/.local/share}/riptide/index.json`
+**MVP v0.7.1**: `--prune`, `--list`, `--resurrect`, and contextual shell completion.
+
+> **Default paths (XDG)**
+>
+> * **Graveyard**: `${XDG_DATA_HOME:-$HOME/.local/share}/nrip/graveyard`
+> * **Index**: `${XDG_DATA_HOME:-$HOME/.local/share}/nrip/index.json`
+
+---
 
 ## Installation
 
-### From Arch User Repository (AUR)
+### Arch User Repository (AUR)
 
 ```bash
-yay -S riptide
-# or 
-paru -S riptide
+yay -S nrip
+# or
+paru -S nrip
 ```
 
-### From cargo (Rust package manager)
+### Cargo
 
 ```bash
 cargo install nrip
@@ -28,24 +32,24 @@ cargo install nrip
 ### From source
 
 ```bash
-git clone https://forgejo.dirty-flix-servarr.fr/Samda/riptide.git
-cd riptide
+git clone https://github.com/Samtroulcode/NRip
+cd NRip
 cargo install --path .
-# binaire dans ~/.cargo/bin/nrip
+# binary will be in ~/.cargo/bin/nrip
 ```
 
 ### Local build
 
 ```bash
 cargo build --release
-./target/release/riptide --help
+./target/release/nrip --help
 ```
 
-## Use
+---
 
-The default location of the graveyard is `${XDG_DATA_HOME:-~/.local/share}/riptide/graveyard`.
+## Usage
 
-```bash
+```
 Safe rm with a graveyard
 
 Usage: nrip [OPTIONS] [PATHS]...
@@ -55,60 +59,76 @@ Arguments:
 
 Options:
   -p, --prune [<TARGET>]      Prune graveyard; optional TARGET value allows `-p TARGET`
-      --target <TARGET>       (optional) explicit target
+      --target <TARGET>       (optional) explicit target (used with --prune)
   -r, --resurrect [<TARGET>]  Resurrect (restore) from graveyard; optional TARGET allows `-r TARGET`
   -l, --list                  List graveyard contents
-      --dry-run
-  -y, --yes                   (optional) skip confirmation prompts
+      --dry-run               Simulation (no changes)
+  -y, --yes                   Skip interactive confirmations
   -h, --help                  Print help
   -V, --version               Print version
 ```
 
-`rip` : move files to the graveyard. (default action)
+### Basic actions
 
-```bash
-nrip file1 file2
-```
+* **Bury (default action):**
 
-`--list (-l)` : list files in the graveyard.
+  ```bash
+  nrip file1 dir2
+  ```
 
-```bash
-nrip -l
-```
+  Items are moved to the graveyard under a **unique name**:
+  `YYYYMMDDTHHMMSS__RANDOM__basename`.
 
-`-p <target>` : graveyard pruning (permanent deletion). (--prune)
+* **List:**
 
-```bash
-nrip -p # interactive pruning of files in the graveyard
-nrip -p file # prune (permanently delete) specific file from graveyard
-```
+  ```bash
+  nrip -l
+  ```
 
-`-r <target>` : resurrect (restore) files from the graveyard. (--resurrect)
+  For each entry it shows:
 
-```bash
-nrip -r file1 file2
-nrip -r # interactive resurrection of files in the graveyard
-```
+  * a short **ID** (first 7 chars of `RANDOM`),
+  * the `deleted_at` timestamp,
+  * the `basename`,
+  * the original path.
 
-`--help (-h)` : display help.
+* **Prune (permanent deletion):**
 
-```bash
-nrip -h
-```
+  ```bash
+  nrip -p               # interactive menu (0=ALL, 1..N)
+  nrip -p foo           # target by basename substring or ID prefix
+  nrip -p --dry-run     # simulate
+  nrip -p -y            # delete without confirmation (dangerous)
+  ```
 
-`--version (-v)` : display version.
+* **Resurrect (restore):**
 
-```bash
-nrip -v
-```
+  ```bash
+  nrip -r               # interactive menu (0=ALL, 1..N)
+  nrip -r foo           # target by basename substring or ID prefix
+  nrip -r --dry-run     # simulate
+  nrip -r -y            # restore without confirmation
+  ```
 
-## Bash and Zsh completion
+  Restoration is **non-destructive**: if the original destination already exists, restoration **fails** (no overwrite).
 
-To activate bash completion, add the following line to your `.bashrc` or `.zshrc` file:
+> **Matching rules (for prune/resurrect)**
+> `TARGET` can be a **substring of the basename** or a **prefix of the short ID** (the 7 chars printed by `-l`).
+> Without `TARGET`, an **interactive picker** is displayed (0=ALL).
 
-```bash
-_rip_complete() {
-  local cur prev cmd
+---
+
+## Shell completion
+
+NRip exposes a hidden completion endpoint used by the functions below:
+`nrip --__complete <context> <prefix>` where `<context>` is `prune` or `resurrect`.
+
+### Zsh
+
+```zsh
+# ~/.zshrc
+_nrip_complete() {
+  local cur prev
   cur=${words[-1]}
   prev=${words[-2]}
 
@@ -121,5 +141,60 @@ _rip_complete() {
   fi
   return 1
 }
-compdef _rip_complete nrip
+compdef _nrip_complete nrip
 ```
+
+### Bash
+
+```bash
+# ~/.bashrc
+_nrip_complete() {
+  local cur prev
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+  if [[ "$prev" == "-p" || "$prev" == "--prune" ]]; then
+    mapfile -t COMPREPLY < <(nrip --__complete prune "$cur")
+  elif [[ "$prev" == "-r" || "$prev" == "--resurrect" ]]; then
+    mapfile -t COMPREPLY < <(nrip --__complete resurrect "$cur")
+  fi
+}
+complete -F _nrip_complete nrip
+```
+
+---
+
+## How it works (robustness & safety)
+
+* **Atomic move when possible**: NRip first tries an atomic `rename(2)` to move the file/dir into the graveyard. If the move crosses filesystems (`EXDEV`), it falls back to **copy then remove**.
+
+* **Durability**: after writing/renaming, the parent directory is `fdatasync`’d to ensure directory entries are persisted.
+
+* **Index file**: `index.json` tracks original/trashed paths and timestamps. It is read/written under an advisory lock to avoid corruption across concurrent NRip processes.
+
+* **Journal**: a plain-text `.journal` logs `PENDING/DONE` and `RESTORE_*` events for basic auditing and recovery hints.
+
+* **Symlinks**: preserved (copied as links) during recursive operations when applicable.
+
+> **Security note**: NRip is a user-space trash bin. It does **not** perform secure shredding/erasure.
+
+---
+
+## Environment & version
+
+* **Paths** honor `XDG_DATA_HOME` (fallback to `$HOME/.local/share`).
+* `nrip -V` prints the Cargo package version used at build time.
+
+---
+
+## Troubleshooting
+
+* **Version mismatch in `nrip -V`**: ensure the `Cargo.toml` in the tagged source actually contains the intended `version` (that value is embedded by Cargo at build time).
+* **Cross-device moves**: seeing a cross-device fallback is expected when source and graveyard live on different filesystems; NRip copies then removes.
+
+---
+
+## License
+
+Dual-licensed under **MIT** and **Apache-2.0** (see `LICENSE*`).
