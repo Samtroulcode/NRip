@@ -4,7 +4,7 @@
 
 Inspired by [rip](https://github.com/nivekuil/rip) — hence the binary name `nrip` (new rip).
 
-**MVP v0.7.1**: `--prune`, `--list`, `--resurrect`, and contextual shell completion.
+**MVP v0.7.2**: `--prune`, `--list`, `--resurrect`, and contextual shell completion.
 
 > **Default paths (XDG)**
 >
