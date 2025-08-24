@@ -20,7 +20,7 @@ paru -S riptide
 ### From cargo (Rust package manager)
 
 ```bash
-cargo install riptide
+cargo install riptide-cli
 ```
 
 ### From source
