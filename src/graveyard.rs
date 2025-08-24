@@ -1,25 +1,58 @@
-use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use rand::Rng;
+use crate::index::Entry;
+use std::collections::HashSet;
 
-use crate::index;
+use anyhow::{Context, Result};
+use chrono::Utc;
+use fs_err as fs;
+use std::ffi::OsString;
+
+use crate::fs_safemove::safe_move_unique;
+use crate::index::{load_index, save_index};
+use rand::{Rng, rng}; // rand 0.9
+
+use crate::index; // pour appeler les shims
 
 pub fn short_id() -> String {
     const ALPH: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-    let mut rng = rand::thread_rng();
+    let mut r = rng();
     (0..7)
         .map(|_| {
-            let i = rng.gen_range(0..ALPH.len());
+            let i = r.random_range(0..ALPH.len());
             ALPH[i] as char
         })
         .collect()
 }
 
-fn graveyard_dir() -> PathBuf {
-    let base = dirs::data_dir().unwrap_or_else(|| PathBuf::from("~/.local/share"));
-    base.join("riptide").join("graveyard")
+fn display_id(e: &index::Entry) -> String {
+    e.trashed_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .and_then(|s| s.split("__").nth(1))
+        .map(|s| s.chars().take(7).collect::<String>())
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn graveyard_dir() -> Result<PathBuf> {
+    let data = crate::paths::data_dir()?;
+    let gy = data.join("nrip").join("graveyard");
+    fs::create_dir_all(&gy)?;
+    Ok(gy)
+}
+
+fn journal_path() -> Result<PathBuf> {
+    Ok(graveyard_dir()?.join(".journal"))
+}
+
+fn append_journal(line: &str) -> Result<()> {
+    use std::io::Write;
+    let jp = journal_path()?;
+    let mut f = fs::OpenOptions::new().create(true).append(true).open(&jp)?;
+    writeln!(f, "{}", line)?;
+    f.sync_all()?;
+    Ok(())
 }
 
 // ---------- helpers copie/rename ----------
@@ -80,142 +113,96 @@ fn safe_move(src: &Path, dst: &Path) -> anyhow::Result<()> {
 }
 // ------------------------------------------
 
-pub fn resurrect(target: Option<String>, yes: bool) -> anyhow::Result<()> {
-    let mut entries = index::load_entries().unwrap_or_default();
+pub fn resurrect(items: &[PathBuf]) -> Result<()> {
+    // items : chemins dans la graveyard (ou bien indices depuis l’index)
+    let mut idx = load_index()?;
+    for gy_path in items {
+        // Retrouver original dans l’index
+        if let Some(pos) = idx.items.iter().position(|e| e.trashed_path == *gy_path) {
+            let original = idx.items[pos].original_path.clone();
 
-    // sélection
-    let chosen: index::Entry = if let Some(q) = target {
-        let q = q.to_lowercase();
-        let mut matches: Vec<index::Entry> = entries
-            .iter()
-            .cloned()
-            .filter(|e| {
-                let base = index::basename_of_original(e).to_lowercase();
-                let id = e.id.as_deref().unwrap_or("").to_lowercase();
-                base.contains(&q) || id.starts_with(&q)
-            })
-            .collect();
-
-        if matches.is_empty() {
-            println!("No graveyard entry matches '{}'.", q);
-            return Ok(());
-        }
-        if matches.len() > 1 && !yes {
-            println!("Multiple matches. Be more specific or pick one:");
-            for (i, m) in matches.iter().enumerate() {
-                let id = m.id.as_deref().unwrap_or("-");
-                println!("{:2}) {:7}  {}", i + 1, id, m.original_path);
+            append_journal(&format!(
+                "RESTORE_PENDING\t{}\t{}",
+                gy_path.display(),
+                original.display()
+            ))?;
+            // Créer le dossier parent si nécessaire (restauration)
+            if let Some(parent) = original.parent() {
+                fs::create_dir_all(parent)?;
             }
-            return Ok(());
-        }
-        matches.remove(0)
-    } else {
-        // prompt interactif
-        if entries.is_empty() {
-            println!("Graveyard is empty.");
-            return Ok(());
-        }
-        println!("Please select a file/folder or item to resurrect:");
-        for (i, e) in entries.iter().enumerate() {
-            let id = e.id.as_deref().unwrap_or("-");
-            let base = index::basename_of_original(e);
-            println!("{:2}) {:7}  {}  ({})", i + 1, id, base, e.original_path);
-        }
-        print!("Enter number (0 to cancel): ");
-        io::stdout().flush()?;
-        let mut buf = String::new();
-        io::stdin().read_line(&mut buf)?;
-        let sel: usize = buf.trim().parse().unwrap_or(0);
-        if sel == 0 || sel > entries.len() {
-            println!("Aborted.");
-            return Ok(());
-        }
-        entries[sel - 1].clone()
-    };
-
-    let src = PathBuf::from(&chosen.stored_path);
-    let mut dst = PathBuf::from(&chosen.original_path);
-
-    if !src.exists() {
-        eprintln!("Stored item not found: {}", src.display());
-        // Purge de l’entrée orpheline
-        entries.retain(|e| e.stored_path != chosen.stored_path);
-        index::save_entries(&entries)?;
-        return Ok(());
-    }
-
-    // collision à destination
-    if dst.exists() {
-        if !yes {
-            print!("Destination exists: {}. Overwrite? [y/N]: ", dst.display());
-            io::stdout().flush()?;
-            let mut ans = String::new();
-            io::stdin().read_line(&mut ans)?;
-            if ans.trim().to_lowercase() != "y" {
-                // suffixe .restored (ou avec id)
-                let base = dst
-                    .file_name()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "restored".into());
-                let mut alt = dst.clone();
-                let id = chosen.id.as_deref().unwrap_or("restored");
-                let suffixed = format!("{}.{}.restored", base, id);
-                alt.set_file_name(suffixed);
-                println!("Restoring to alternative path: {}", alt.display());
-                dst = alt;
+            // move inverse (unique_name pas nécessaire ici → on veut retrouver le nom exact)
+            // mais s'il existe déjà, on refuse (éviter écrasement) :
+            if original.exists() {
+                anyhow::bail!("La cible existe déjà: {}", original.display());
             }
+
+            // Implémentation simple : essayer rename, sinon fallback copy+unlink
+            match fs::rename(gy_path, &original) {
+                Ok(()) => {}
+                Err(e) if super::fs_safemove::is_exdev(&e) => {
+                    super::fs_safemove::copy_recursively(gy_path, &original)?;
+                    super::fs_safemove::remove_recursively(gy_path)?;
+                }
+                Err(e) => {
+                    return Err(e).with_context(|| {
+                        format!("rename {} -> {}", gy_path.display(), original.display())
+                    });
+                }
+            }
+
+            append_journal(&format!(
+                "RESTORE_DONE\t{}\t{}",
+                gy_path.display(),
+                original.display()
+            ))?;
+            idx.items.remove(pos);
+        } else {
+            // si pas d'entrée, on tente quand même la restauration best‑effort
+            // (utile après crash si l’index n’a pas été sync).
+            // Ici, on pourrait logguer/ignorer selon le choix de UX.
         }
     }
-
-    // move (rename ou copie+unlink)
-    safe_move(&src, &dst)?;
-
-    // MAJ index: retire l’entrée
-    entries.retain(|e| e.stored_path != chosen.stored_path);
-    index::save_entries(&entries)?;
-
-    println!("Resurrected -> {}", dst.display());
+    save_index(&idx)?;
     Ok(())
 }
 
-pub fn bury(paths: Vec<PathBuf>) -> anyhow::Result<()> {
-    let gy = graveyard_dir();
-    fs::create_dir_all(&gy)?;
+pub fn bury(paths: &[PathBuf]) -> Result<()> {
+    let gy = graveyard_dir()?;
+    let mut idx = load_index()?;
 
-    for path in paths {
-        if !path.exists() {
-            eprintln!("{} not found", path.display());
-            continue;
-        }
+    for src in paths {
+        let base: OsString = src.file_name().unwrap_or_default().to_os_string();
+        append_journal(&format!(
+            "PENDING\t{}\t{}",
+            src.display(),
+            base.to_string_lossy()
+        ))?;
+        let dst = safe_move_unique(src, &gy, &base)
+            .with_context(|| format!("move {} -> graveyard", src.display()))?;
+        append_journal(&format!("DONE\t{}\t{}", src.display(), dst.display()))?;
 
-        let original_abs: PathBuf = match path.canonicalize() {
-            Ok(p) => p,
-            Err(_) => {
-                // fallback si canonicalize échoue (ex: permissions) : CWD + path
-                std::env::current_dir()?.join(&path)
-            }
-        };
-
-        // destination (tu gardes ton schéma actuel)
-        let dest = gy.join(path.file_name().unwrap());
-
-        // déplacer (rename ou copie inter-FS via safe_move si tu préfères)
-        fs::rename(&path, &dest)?;
-
-        // ✅ On enregistre l'ABSOLU dans l'index
-        index::add_entry(&original_abs, &dest)?;
-
-        println!("moved {} -> {}", original_abs.display(), dest.display());
+        idx.items.push(Entry {
+            original_path: src.clone(),
+            trashed_path: dst.clone(),
+            deleted_at: Utc::now().timestamp(),
+        });
     }
+    save_index(&idx)?;
     Ok(())
 }
 
 pub fn list() -> anyhow::Result<()> {
     let entries = index::load_entries().unwrap_or_default();
     for e in entries {
-        let id = e.id.as_deref().unwrap_or("-");
+        let id = display_id(&e);
         let base = index::basename_of_original(&e);
-        println!("{:7}  {}  {} ({})", id, e.deleted_at, base, e.original_path);
+        println!(
+            "{:7}  {}  {} ({})",
+            id,
+            e.deleted_at,
+            base,
+            e.original_path.display()
+        );
     }
     Ok(())
 }
@@ -227,12 +214,13 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
     // 1) Construire la liste à supprimer (to_delete)
     let to_delete: Vec<index::Entry> = if let Some(ref q0) = target {
         let q = q0.to_lowercase();
+
         let mut matches: Vec<index::Entry> = entries
             .iter()
             .cloned()
             .filter(|e| {
                 let base = index::basename_of_original(e).to_lowercase();
-                let id = e.id.as_deref().unwrap_or("").to_lowercase();
+                let id = display_id(e).to_lowercase();
                 base.contains(&q) || id.starts_with(&q)
             })
             .collect();
@@ -241,11 +229,10 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
             println!("No graveyard entry matches '{}'.", q0);
             return Ok(());
         }
-        // Plusieurs résultats sans -y : afficher et sortir (l'auto-complétion aidera)
         if matches.len() > 1 && !yes {
             println!("Multiple matches (use TAB completion or add -y to prune all of them):");
             for m in &matches {
-                let id = m.id.as_deref().unwrap_or("-");
+                let id = display_id(m);
                 println!("  {:7}  {}", id, index::basename_of_original(m));
             }
             return Ok(());
@@ -260,9 +247,15 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
         println!("Select an item to delete or choose 0) ALL:");
         println!("  0) ALL");
         for (i, e) in entries.iter().enumerate() {
-            let id = e.id.as_deref().unwrap_or("-");
+            let id = display_id(e);
             let base = index::basename_of_original(e);
-            println!("{:3}) {:7}  {}  ({})", i + 1, id, base, e.original_path);
+            println!(
+                "{:3}) {:7}  {}  ({})",
+                i + 1,
+                id,
+                base,
+                e.original_path.display()
+            );
         }
         print!("Choice [0=ALL, q=cancel]: ");
         io::stdout().flush()?;
@@ -288,7 +281,7 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
     // 2) Bilan et confirmations
     let mut total_bytes: u64 = 0;
     for e in &to_delete {
-        if let Ok(meta) = fs::metadata(&e.stored_path) {
+        if let Ok(meta) = fs::metadata(&e.trashed_path) {
             total_bytes = total_bytes.saturating_add(meta.len());
         }
     }
@@ -340,7 +333,7 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
     // 3) Suppression des fichiers/dirs
     let mut removed = 0usize;
     for e in &to_delete {
-        let p = Path::new(&e.stored_path);
+        let p: &Path = &e.trashed_path;
         let res = if p.is_dir() {
             fs::remove_dir_all(p)
         } else {
@@ -362,7 +355,7 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
     // 4) Mise à jour de l’index + nettoyage dossier
     if is_all {
         index::save_entries(&Vec::new())?;
-        let gy = graveyard_dir();
+        let gy = graveyard_dir()?; // <— ta version renvoie Result<PathBuf>
         if let Ok(rd) = fs::read_dir(&gy) {
             for ent in rd.filter_map(|r| r.ok()) {
                 let p = ent.path();
@@ -374,9 +367,9 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
             }
         }
     } else {
-        let delete_set: std::collections::HashSet<String> =
-            to_delete.iter().map(|e| e.stored_path.clone()).collect();
-        entries.retain(|e| !delete_set.contains(&e.stored_path));
+        let delete_set: HashSet<PathBuf> =
+            to_delete.iter().map(|e| e.trashed_path.clone()).collect();
+        entries.retain(|e| !delete_set.contains(&e.trashed_path));
         index::save_entries(&entries)?;
     }
 
@@ -389,10 +382,8 @@ pub fn completion_candidates(prefix: Option<&str>) -> anyhow::Result<Vec<String>
     let entries = index::load_entries().unwrap_or_default();
     let mut out = Vec::with_capacity(entries.len() * 2);
     for e in entries {
-        if let Some(id) = &e.id {
-            out.push(id.clone());
-        }
-        out.push(index::basename_of_original(&e));
+        out.push(display_id(&e)); // <- id dérivé (7 chars)
+        out.push(index::basename_of_original(&e)); // <- basename
     }
     if let Some(p) = prefix {
         let p = p.to_lowercase();

@@ -2,8 +2,10 @@
 use clap::{ArgAction, CommandFactory, Parser};
 use std::path::PathBuf;
 
+mod fs_safemove;
 mod graveyard;
 mod index;
+mod paths;
 
 #[derive(Parser)]
 #[command(name = "nrip", version, about = "Safe rm with a graveyard")]
@@ -72,13 +74,14 @@ fn main() -> anyhow::Result<()> {
     }
 
     // RESURRECT
-    if let Some(res_opt) = cli.resurrect {
-        let target = match res_opt {
-            Some(t) => Some(t),
-            None => None, // -r sans valeur -> prompt interactif
-        };
-        graveyard::resurrect(target, cli.yes)?;
-        return Ok(());
+    if let Some(_res_opt) = cli.resurrect {
+        match &cli.target {
+            Some(s) => {
+                let v = vec![PathBuf::from(s)];
+                graveyard::resurrect(&v)?; // slice OK
+            }
+            None => { /* TODO: comportement quand -r sans target */ }
+        }
     }
 
     // PRUNE
@@ -100,7 +103,7 @@ fn main() -> anyhow::Result<()> {
 
     // Default action: bury paths
     if !cli.paths.is_empty() {
-        graveyard::bury(cli.paths)?;
+        graveyard::bury(&cli.paths)?;
         return Ok(());
     }
 
