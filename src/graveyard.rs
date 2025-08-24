@@ -187,10 +187,25 @@ pub fn bury(paths: Vec<PathBuf>) -> anyhow::Result<()> {
             eprintln!("{} not found", path.display());
             continue;
         }
+
+        let original_abs: PathBuf = match path.canonicalize() {
+            Ok(p) => p,
+            Err(_) => {
+                // fallback si canonicalize échoue (ex: permissions) : CWD + path
+                std::env::current_dir()?.join(&path)
+            }
+        };
+
+        // destination (tu gardes ton schéma actuel)
         let dest = gy.join(path.file_name().unwrap());
+
+        // déplacer (rename ou copie inter-FS via safe_move si tu préfères)
         fs::rename(&path, &dest)?;
-        index::add_entry(&path, &dest)?;
-        println!("moved {} -> {}", path.display(), dest.display());
+
+        // ✅ On enregistre l'ABSOLU dans l'index
+        index::add_entry(&original_abs, &dest)?;
+
+        println!("moved {} -> {}", original_abs.display(), dest.display());
     }
     Ok(())
 }
@@ -200,7 +215,7 @@ pub fn list() -> anyhow::Result<()> {
     for e in entries {
         let id = e.id.as_deref().unwrap_or("-");
         let base = index::basename_of_original(&e);
-        println!("{:7}  {}  {}", id, e.deleted_at, base);
+        println!("{:7}  {}  {} ({})", id, e.deleted_at, base, e.original_path);
     }
     Ok(())
 }
