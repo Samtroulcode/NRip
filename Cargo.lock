@@ -397,8 +397,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "rip"
-version = "0.6.0"
+name = "riptide"
+version = "0.6.2"
 dependencies = [
  "anyhow",
  "chrono",
