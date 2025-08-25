@@ -30,23 +30,9 @@ NRip moves files/dirs to a **graveyard** instead of deleting them. You can then 
 
 ---
 
-## Gloomy tour (screencasts)
+## Gloomy tour (demo)
 
-* **Bury** (default):
-
-  ![Bury demo](assets/gifs/nrip-bury.gif)
-
-* **List**: compact output with icons:
-
-  ![List demo](assets/gifs/nrip-list.gif)
-
-* **Cremate** (permanent deletion):
-
-  ![Cremate demo](assets/gifs/nrip-cremate.gif)
-
-* **Resurrect** (restore):
-
-  ![Resurrect demo](assets/gifs/nrip-resurrect.gif)
+  ![Resurrect demo](assets/gifs/demo.svg)
 
 ---
 
