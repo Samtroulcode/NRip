@@ -57,23 +57,23 @@ pub fn pick_entries_with_fzf(idx: &Index, preview: bool) -> Result<Vec<usize>> {
         ]);
     }
 
-    let mut child = cmd.spawn().context("fzf non trouvé (installez `fzf`)")?;
+    let mut child = cmd
+        .spawn()
+        .context("fzf not found (please install `fzf`)")?;
 
     {
         use std::io::Write;
-        let stdin = child.stdin.as_mut().context("ouverture stdin fzf")?;
+        let stdin = child.stdin.as_mut().context("open fzf stdin")?;
         for line in &lines {
             writeln!(stdin, "{line}")?;
         }
     }
 
-    let out = child.wait_with_output().context("exécution fzf")?;
+    let out = child.wait_with_output().context("run fzf")?;
     if !out.status.success() {
-        // 1 = no match / 130 = ESC/Ctrl-C → on considère “aucune sélection”.
         return Ok(vec![]);
     }
 
-    // On parse la 1ʳᵉ colonne (index) pour chaque ligne sélectionnée (NUL-separated)
     let mut selected = Vec::new();
     for part in out.stdout.split(|&b| b == 0u8).filter(|s| !s.is_empty()) {
         let s = match std::str::from_utf8(part) {

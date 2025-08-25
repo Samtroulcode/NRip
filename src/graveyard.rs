@@ -57,7 +57,7 @@ pub fn resurrect(items: &[PathBuf]) -> Result<()> {
                     fs::create_dir_all(parent)?;
                 }
                 if original.exists() {
-                    anyhow::bail!("La cible existe déjà: {}", original.display());
+                    anyhow::bail!("Target already exists: {}", original.display());
                 }
 
                 match fs::rename(gy_path, &original) {

@@ -66,14 +66,14 @@ pub fn guard_path(p: &Path, ctx: &SafetyCtx) -> anyhow::Result<()> {
         if !can_bypass {
             use anyhow::bail;
             let msg = match reason {
-                Forbid::Root => "refusé: / est protégé (non contournable)",
-                Forbid::Dot => "refusé: '.' n'est pas autorisé",
-                Forbid::DotDot => "refusé: '..' n'est pas autorisé",
-                Forbid::GraveyardItself => "refusé: cible = graveyard lui-même",
-                Forbid::InsideGraveyard => "refusé: élément à l’intérieur du graveyard",
-                Forbid::IndexFile => "refusé: cible index.json/.index.lock",
-                Forbid::JournalFile => "refusé: cible .journal",
-                Forbid::Empty => "refusé: chemin vide",
+                Forbid::Root => "denied: / is protected (cannot be overridden)",
+                Forbid::Dot => "denied: '.' is not allowed",
+                Forbid::DotDot => "denied: '..' is not allowed",
+                Forbid::GraveyardItself => "denied: target is the graveyard itself",
+                Forbid::InsideGraveyard => "denied: item is inside the graveyard",
+                Forbid::IndexFile => "denied: target is index.json/.index.lock",
+                Forbid::JournalFile => "denied: target is .journal",
+                Forbid::Empty => "denied: empty path",
             };
             bail!(msg);
         }
