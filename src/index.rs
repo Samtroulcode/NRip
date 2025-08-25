@@ -7,11 +7,27 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum Kind {
+    File,
+    Dir,
+    Symlink,
+    Other,
+}
+
+impl Default for Kind {
+    fn default() -> Self {
+        Kind::Other
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entry {
     pub original_path: PathBuf,
     pub trashed_path: PathBuf,
     pub deleted_at: i64,
+    #[serde(default)]
+    pub kind: Kind, // ← nouveau champ, défaut = Other pour compat avec anciens index
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

@@ -3,10 +3,10 @@ use std::io::{self, Write};
 use std::path;
 use std::path::PathBuf;
 
-use crate::index::Entry;
+use crate::index::{Entry, Kind};
 
 use anyhow::{Context, Result};
-use chrono::Utc;
+use chrono::{Local, TimeZone, Utc};
 use fs_err as fs;
 use std::ffi::OsString;
 
@@ -22,6 +22,15 @@ fn display_id(e: &index::Entry) -> String {
         .and_then(|s| s.split("__").nth(1))
         .map(|s| s.chars().take(7).collect::<String>())
         .unwrap_or_else(|| "-".to_string())
+}
+
+fn kind_letter(k: Kind) -> char {
+    match k {
+        Kind::File => 'F',
+        Kind::Dir => 'D',
+        Kind::Symlink => 'L',
+        Kind::Other => '?',
+    }
 }
 
 fn graveyard_dir() -> Result<PathBuf> {
@@ -278,6 +287,18 @@ pub fn bury(paths: &[PathBuf], force: bool) -> Result<()> {
                 original_abs.display(),
                 base.to_string_lossy()
             ))?;
+            // Détection du "kind" au moment du déplacement (fiable)
+            let md = fs::symlink_metadata(src)?;
+            let kind = if md.file_type().is_dir() {
+                Kind::Dir
+            } else if md.file_type().is_file() {
+                Kind::File
+            } else if md.file_type().is_symlink() {
+                Kind::Symlink
+            } else {
+                Kind::Other
+            };
+
             let dst = safe_move_unique(src, &gy, &base)
                 .with_context(|| format!("move {} -> graveyard", src.display()))?;
             append_journal(&format!(
@@ -290,6 +311,7 @@ pub fn bury(paths: &[PathBuf], force: bool) -> Result<()> {
                 original_path: original_abs,
                 trashed_path: dst,
                 deleted_at: Utc::now().timestamp(),
+                kind,
             });
         }
         Ok(())
@@ -301,12 +323,27 @@ pub fn list() -> anyhow::Result<()> {
     for e in entries {
         let id = display_id(&e);
         let base = index::basename_of_original(&e);
+        // horodatage local lisible
+        let dt = Local
+            .timestamp_opt(e.deleted_at, 0)
+            .single()
+            .unwrap_or_else(|| Local.timestamp_opt(0, 0).single().unwrap());
+        let absolute = dt.format("%Y-%m-%d %H:%M:%S").to_string();
+        // âge relatif (ex: "3m 12s")
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
+        let then = std::time::Duration::from_secs(e.deleted_at as u64);
+        let rel = humantime::format_duration(now.saturating_sub(then)).to_string();
+        let k = kind_letter(e.kind);
         println!(
-            "{:7}  {}  {} ({})",
+            "{:7}  {}  ({})  {}  {} ({})",
             id,
-            e.deleted_at,
+            k,
+            absolute,
             base,
-            e.original_path.display()
+            e.original_path.display(),
+            rel
         );
     }
     Ok(())

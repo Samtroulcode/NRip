@@ -1,15 +1,25 @@
 use anyhow::{Context, Result};
-use chrono::{TimeZone, Utc};
+use chrono::{Local, TimeZone};
 use std::process::{Command, Stdio};
 
-use crate::index::Index;
+use crate::index::{Index, Kind};
+
+fn kind_letter(k: Kind) -> char {
+    match k {
+        Kind::File => 'F',
+        Kind::Dir => 'D',
+        Kind::Symlink => 'L',
+        Kind::Other => '?',
+    }
+}
 
 fn human_when(ts: i64) -> String {
-    let dt = Utc
+    // Date locale courte (pour fzf)
+    let dt = Local
         .timestamp_opt(ts, 0)
         .single()
-        .unwrap_or_else(|| Utc.timestamp_opt(0, 0).single().unwrap());
-    dt.format("%Y-%m-%d %H:%M:%S UTC").to_string()
+        .unwrap_or_else(|| Local.timestamp_opt(0, 0).single().unwrap());
+    dt.format("%Y-%m-%d %H:%M").to_string()
 }
 
 /// Lignes pour fzf: "IDX \t DATE \t ORIGINAL \t -> \t TRASHED"
@@ -19,8 +29,9 @@ fn build_fzf_lines(idx: &Index) -> Vec<String> {
         .enumerate()
         .map(|(i, e)| {
             format!(
-                "{}\t{}\t{}\t->\t{}",
+                "{}\t{}\t{}\t{}\t->\t{}",
                 i,
+                kind_letter(e.kind),
                 human_when(e.deleted_at),
                 e.original_path.display(),
                 e.trashed_path.display()
@@ -44,7 +55,7 @@ pub fn pick_entries_with_fzf(idx: &Index, preview: bool) -> Result<Vec<usize>> {
         .arg("--ansi")
         .arg("--print0") // sortie NUL-delimitée
         .args(["--delimiter", "\t"]) // champs = tab
-        .args(["--with-nth", "2.."]) // masque l'IDX à l'affichage
+        .args(["--with-nth", "3.."]) // masque l'IDX+KIND à l'affichage
         .stdin(Stdio::piped())
         .stdout(Stdio::piped());
 
