@@ -1,4 +1,3 @@
-// src/main.rs
 use clap::{ArgAction, CommandFactory, Parser};
 use std::path::PathBuf;
 

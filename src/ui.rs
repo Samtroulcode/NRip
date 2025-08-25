@@ -1,15 +1,14 @@
-// src/ui.rs
 use anyhow::{Context, Result};
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{TimeZone, Utc};
 use std::process::{Command, Stdio};
 
 use crate::index::Index;
 
 fn human_when(ts: i64) -> String {
-    let dt = DateTime::<Utc>::from_naive_utc_and_offset(
-        NaiveDateTime::from_timestamp_opt(ts, 0).unwrap_or_default(),
-        Utc,
-    );
+    let dt = Utc
+        .timestamp_opt(ts, 0)
+        .single()
+        .unwrap_or_else(|| Utc.timestamp_opt(0, 0).single().unwrap());
     dt.format("%Y-%m-%d %H:%M:%S UTC").to_string()
 }
 
@@ -45,14 +44,12 @@ pub fn pick_entries_with_fzf(idx: &Index, preview: bool) -> Result<Vec<usize>> {
         .arg("--ansi")
         .arg("--print0") // sortie NUL-delimitée
         .args(["--delimiter", "\t"]) // champs = tab
-        .args(["--with-nth", "2.."]) // on masque l'IDX à l'affichage
-        .args(["--accept-nth", "1"]) // ... mais on NE SORT que l'IDX
+        .args(["--with-nth", "2.."]) // masque l'IDX à l'affichage
         .stdin(Stdio::piped())
         .stdout(Stdio::piped());
 
     if preview {
-        // Tu pourras raffiner plus tard (bat, ls -l, file, etc.).
-        // Ici, on affiche la colonne "TRASHED" avec un ls -l simple :
+        // Aperçu simple: liste le chemin TRASHED (colonne après "->")
         cmd.args([
             "--preview",
             r#"sh -c 'printf "%s\n" "$@" | awk -F"\t" "{for (i=1;i<=NF;i++) if (\$i==\"->\") { print \$(i+1); exit }}" | xargs -r ls -ld --'"#,
@@ -76,15 +73,18 @@ pub fn pick_entries_with_fzf(idx: &Index, preview: bool) -> Result<Vec<usize>> {
         return Ok(vec![]);
     }
 
-    // Grâce à --accept-nth=1, la sortie contient UNIQUEMENT les indices, séparés par NUL.
+    // On parse la 1ʳᵉ colonne (index) pour chaque ligne sélectionnée (NUL-separated)
     let mut selected = Vec::new();
     for part in out.stdout.split(|&b| b == 0u8).filter(|s| !s.is_empty()) {
-        if let Ok(i) = std::str::from_utf8(part)
-            .ok()
-            .and_then(|s| s.trim().parse::<usize>().ok())
-        {
-            if i < idx.items.len() {
-                selected.push(i);
+        let s = match std::str::from_utf8(part) {
+            Ok(x) => x,
+            Err(_) => continue,
+        };
+        if let Some(first_field) = s.split('\t').next() {
+            if let Ok(i) = first_field.trim().parse::<usize>() {
+                if i < idx.items.len() {
+                    selected.push(i);
+                }
             }
         }
     }
