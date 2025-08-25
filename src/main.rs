@@ -1,4 +1,5 @@
-use clap::{ArgAction, CommandFactory, Parser};
+use clap::{ArgAction, ColorChoice, CommandFactory, FromArgMatches, Parser};
+use std::io::IsTerminal as _;
 use std::path::PathBuf;
 
 mod fs_safemove;
@@ -62,8 +63,28 @@ struct Cli {
 }
 
 fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+    // Politique couleur:
+    // - Si NO_COLOR est défini → jamais de couleur
+    // - Sinon, Auto (TTY uniquement)
+    let no_color_env = std::env::var_os("NO_COLOR").is_some();
+    let is_tty = std::io::stdout().is_terminal();
 
+    // Config Clap (help colorisée)
+    let mut cmd = Cli::command();
+    cmd = cmd.color(if no_color_env {
+        ColorChoice::Never
+    } else {
+        ColorChoice::Auto
+    });
+    let mut matches = cmd.get_matches();
+    let cli = Cli::from_arg_matches_mut(&mut matches)?;
+
+    // Config `yansi` (pour nos propres sorties)
+    if no_color_env || !is_tty {
+        yansi::disable();
+    } else {
+        yansi::enable();
+    }
     // Internal completion endpoint
     if !cli.__complete.is_empty() {
         let context = cli.__complete[0].as_str();
