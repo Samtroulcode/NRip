@@ -28,35 +28,6 @@ fn index_paths() -> Result<(PathBuf, PathBuf, PathBuf)> {
     Ok((idx, idx_dir, gy_dir))
 }
 
-fn fzf_picker(options: &[&str]) -> Result<Option<String>> {
-    use std::process::{Command, Stdio};
-
-    let mut child = Command::new("fzf")
-        .arg("--height=40%")
-        .arg("--layout=reverse")
-        .arg("--border")
-        .arg("--ansi")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .context("spawn fzf")?;
-
-    {
-        let stdin = child.stdin.as_mut().context("open fzf stdin")?;
-        for opt in options {
-            writeln!(stdin, "{opt}").context("write to fzf stdin")?;
-        }
-    }
-
-    let output = child.wait_with_output().context("wait on fzf")?;
-    if output.status.success() {
-        let selection = String::from_utf8_lossy(&output.stdout);
-        Ok(Some(selection.trim().to_string()))
-    } else {
-        Ok(None) // no selection or error
-    }
-}
-
 fn lock_path(dir: &Path) -> PathBuf {
     dir.join(".index.lock")
 }
