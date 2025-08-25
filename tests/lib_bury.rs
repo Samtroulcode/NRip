@@ -1,4 +1,3 @@
-// tests/lib_bury.rs
 use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
 use serial_test::serial;
@@ -44,4 +43,3 @@ fn bury_twice_same_name_produces_distinct_targets() -> Result<(), Box<dyn std::e
 
     Ok(())
 }
-
