@@ -7,18 +7,13 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum Kind {
     File,
     Dir,
     Symlink,
+    #[default]
     Other,
-}
-
-impl Default for Kind {
-    fn default() -> Self {
-        Kind::Other
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
