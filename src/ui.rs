@@ -1,6 +1,9 @@
+// src/ui.rs
 use anyhow::{Context, Result};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use std::process::{Command, Stdio};
+
+use crate::index::Index;
 
 fn human_when(ts: i64) -> String {
     let dt = DateTime::<Utc>::from_naive_utc_and_offset(
@@ -10,7 +13,7 @@ fn human_when(ts: i64) -> String {
     dt.format("%Y-%m-%d %H:%M:%S UTC").to_string()
 }
 
-/// Construit les lignes pour fzf: "IDX\tDATE\tORIGINAL -> TRASHED"
+/// Lignes pour fzf: "IDX \t DATE \t ORIGINAL \t -> \t TRASHED"
 fn build_fzf_lines(idx: &Index) -> Vec<String> {
     idx.items
         .iter()
@@ -27,7 +30,7 @@ fn build_fzf_lines(idx: &Index) -> Vec<String> {
         .collect()
 }
 
-/// Lance fzf en multi-sélection et renvoie les indices sélectionnés dans `idx.items`
+/// Lance fzf (obligatoire). Retourne les indices sélectionnés (dans idx.items).
 pub fn pick_entries_with_fzf(idx: &Index, preview: bool) -> Result<Vec<usize>> {
     let lines = build_fzf_lines(idx);
     if lines.is_empty() {
@@ -35,78 +38,57 @@ pub fn pick_entries_with_fzf(idx: &Index, preview: bool) -> Result<Vec<usize>> {
     }
 
     let mut cmd = Command::new("fzf");
-    cmd.arg("-m")
+    cmd.arg("--multi") // multi-sélection
         .arg("--height=40%")
         .arg("--layout=reverse")
         .arg("--border")
         .arg("--ansi")
-        // on ne renvoie que la 1re colonne (l’index) à la sortie:
-        .args(["--with-nth", "2.."])
-        .args(["--print0"]) // sortie NUL-separated pour éviter les surprises
+        .arg("--print0") // sortie NUL-delimitée
+        .args(["--delimiter", "\t"]) // champs = tab
+        .args(["--with-nth", "2.."]) // on masque l'IDX à l'affichage
+        .args(["--accept-nth", "1"]) // ... mais on NE SORT que l'IDX
         .stdin(Stdio::piped())
         .stdout(Stdio::piped());
 
     if preview {
-        // Aperçu simple: `ls -l` de la cible dans le graveyard (col 4)
-        // {n} = nth token (1-based) côté fzf; on a masqué la 1re col à l’affichage,
-        // mais elle reste en entrée. Pour un preview plus riche, redonne l’index
-        // en --preview-label et reparse; ici on fait simple: on reconstruit via awk.
+        // Tu pourras raffiner plus tard (bat, ls -l, file, etc.).
+        // Ici, on affiche la colonne "TRASHED" avec un ls -l simple :
         cmd.args([
             "--preview",
-            r#"awk -F'\t' '{for (i=1;i<=NF;i++) if ($i=="->") { print $(i+1); exit }}' <<< {+}"#,
+            r#"sh -c 'printf "%s\n" "$@" | awk -F"\t" "{for (i=1;i<=NF;i++) if (\$i==\"->\") { print \$(i+1); exit }}" | xargs -r ls -ld --'"#,
+            "--preview-window=right:60%",
         ]);
     }
 
-    let mut child = cmd.spawn().context("spawn fzf")?;
+    let mut child = cmd.spawn().context("fzf non trouvé (installez `fzf`)")?;
 
     {
         use std::io::Write;
-        let stdin = child.stdin.as_mut().context("open fzf stdin")?;
+        let stdin = child.stdin.as_mut().context("ouverture stdin fzf")?;
         for line in &lines {
-            // On donne TOUTES les colonnes à fzf (index en 1er champ)
             writeln!(stdin, "{line}")?;
         }
     }
 
-    let out = child.wait_with_output().context("wait fzf")?;
+    let out = child.wait_with_output().context("exécution fzf")?;
     if !out.status.success() {
-        return Ok(vec![]); // échappé/annulé
+        // 1 = no match / 130 = ESC/Ctrl-C → on considère “aucune sélection”.
+        return Ok(vec![]);
     }
 
-    // out.stdout contient les lignes sélectionnées, NUL-separated (print0)
-    let raw = out.stdout;
-    let parts = raw.split(|&b| b == 0u8).filter(|s| !s.is_empty());
-
-    // Chaque partie est LA LIGNE ENTIÈRE sélectionnée (pas seulement la 1re col)
-    // On relit l’index (1re col) pour mapper:
+    // Grâce à --accept-nth=1, la sortie contient UNIQUEMENT les indices, séparés par NUL.
     let mut selected = Vec::new();
-    for part in parts {
-        let s = String::from_utf8_lossy(part);
-        if let Some(first_field) = s.split('\t').next() {
-            if let Ok(i) = first_field.parse::<usize>() {
-                if i < idx.items.len() {
-                    selected.push(i);
-                }
+    for part in out.stdout.split(|&b| b == 0u8).filter(|s| !s.is_empty()) {
+        if let Ok(i) = std::str::from_utf8(part)
+            .ok()
+            .and_then(|s| s.trim().parse::<usize>().ok())
+        {
+            if i < idx.items.len() {
+                selected.push(i);
             }
         }
     }
     selected.sort_unstable();
     selected.dedup();
     Ok(selected)
-}
-
-/// Variante simple: détecte l’absence de fzf (NotFound) -> renvoie Ok(vec![]) pour fallback.
-pub fn try_pick_entries(idx: &Index, preview: bool) -> Result<Vec<usize>> {
-    match pick_entries_with_fzf(idx, preview) {
-        Err(e)
-            if e.root_cause()
-                .to_string()
-                .contains("No such file or directory")
-                || e.root_cause().to_string().contains("not found") =>
-        {
-            // fzf non installé
-            Ok(vec![])
-        }
-        other => other,
-    }
 }
