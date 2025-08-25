@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 use std::path;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::index::Entry;
 use std::collections::HashSet;
@@ -202,9 +202,9 @@ pub fn bury(paths: &[PathBuf], force: bool) -> Result<()> {
 
     index::with_index_mut(|idx| {
         for src in paths {
-            guard_path(src, &ctx)?;
             let original_abs =
                 path::absolute(src).with_context(|| format!("absolutize {}", src.display()))?;
+            guard_path(&original_abs, &ctx)?;
             let base: OsString = src.file_name().unwrap_or_default().to_os_string();
 
             append_journal(&format!(
