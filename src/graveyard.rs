@@ -15,6 +15,19 @@ use crate::index::{load_index, save_index};
 
 use crate::index; // pour appeler les shims
 
+const APP_DIR: &str = env!("CARGO_PKG_NAME");
+
+fn data_home() -> PathBuf {
+    if let Some(dir) = dirs::data_dir() {
+        dir
+    } else {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."));
+        home.join(".local").join("share")
+    }
+}
+
 fn display_id(e: &index::Entry) -> String {
     e.trashed_path
         .file_name()
@@ -26,7 +39,7 @@ fn display_id(e: &index::Entry) -> String {
 
 fn graveyard_dir() -> Result<PathBuf> {
     let data = crate::paths::data_dir()?;
-    let gy = data.join("nrip").join("graveyard");
+    let gy = data.join(APP_DIR).join("graveyard");
     fs::create_dir_all(&gy)?;
     Ok(gy)
 }

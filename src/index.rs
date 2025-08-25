@@ -7,6 +7,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
+const APP_DIR: &str = env!("CARGO_PKG_NAME");
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entry {
     pub original_path: PathBuf,
@@ -19,9 +21,24 @@ pub struct Index {
     pub items: Vec<Entry>,
 }
 
+fn data_home() -> PathBuf {
+    if let Some(dir) = dirs::data_dir() {
+        dir
+    } else {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."));
+        home.join(".local").join("share")
+    }
+}
+
+fn index_path() -> PathBuf {
+    data_home().join(APP_DIR).join("index.json")
+}
+
 fn index_paths() -> Result<(PathBuf, PathBuf, PathBuf)> {
     let data_dir = crate::paths::data_dir()?; // adapte si besoin
-    let idx_dir = data_dir.join("nrip"); // ou data_dir direct si déjà …/nrip
+    let idx_dir = index_path().parent().map(PathBuf::from).unwrap_or(data_dir);
     let gy_dir = idx_dir.join("graveyard");
     let idx = idx_dir.join("index.json");
     fs::create_dir_all(&gy_dir)?;
