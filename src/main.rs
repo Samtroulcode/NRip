@@ -12,7 +12,7 @@ mod ui;
 #[command(name = "nrip", version, about = "Safe rm with a graveyard")]
 struct Cli {
     /// Files/dirs to remove (default action)
-    #[arg(value_name = "PATHS")]
+    #[arg(value_name = "PATHS", allow_hyphen_values = true)]
     paths: Vec<PathBuf>,
 
     /// Prune graveyard; optional TARGET value allows `-p TARGET`
@@ -40,6 +40,10 @@ struct Cli {
         conflicts_with_all = ["paths", "prune", "target", "list"]
     )]
     resurrect: Option<Option<String>>,
+
+    /// Force
+    #[arg(short = 'f', long = "force")]
+    force: bool,
 
     /// List graveyard contents
     #[arg(short = 'l', long = "list")]
@@ -102,7 +106,7 @@ fn main() -> anyhow::Result<()> {
 
     // Default action: bury paths
     if !cli.paths.is_empty() {
-        graveyard::bury(&cli.paths)?;
+        graveyard::bury(&cli.paths, cli.force)?;
         return Ok(());
     }
 
