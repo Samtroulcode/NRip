@@ -1,6 +1,6 @@
 [package]
 name = "nrip"
-version = "0.8.6"
+version = "0.8.7"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Safe rm with a graveyard (MVP: rm, ls, prune, resurrect)"
