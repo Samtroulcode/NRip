@@ -12,6 +12,7 @@ use std::ffi::OsString;
 
 use crate::fs_safemove::safe_move_unique;
 use crate::index::{load_index, save_index};
+use crate::safety::{SafetyCtx, guard_path};
 
 use crate::index; // pour appeler les shims
 
@@ -221,7 +222,14 @@ pub fn bury(paths: &[PathBuf]) -> Result<()> {
     let gy = graveyard_dir()?;
     let mut idx = load_index()?;
 
+    let ctx = SafetyCtx {
+        graveyard: gy.clone(),
+        preserve_root: true,
+        force: false,
+    };
+
     for src in paths {
+        guard_path(src, &ctx)?; // <<--- REFUS IMMÉDIAT SI NECESSAIRE
         // 1) Capture l’ABSOLU LOGIQUE AVANT le move (ne résout pas les symlinks)
         let original_abs =
             path::absolute(src).with_context(|| format!("absolutize {}", src.display()))?;

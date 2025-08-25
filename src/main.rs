@@ -5,6 +5,7 @@ mod fs_safemove;
 mod graveyard;
 mod index;
 mod paths;
+mod safety;
 mod ui;
 
 #[derive(Parser)]
