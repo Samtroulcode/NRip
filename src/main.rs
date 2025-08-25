@@ -1,3 +1,4 @@
+use clap::builder::styling::{AnsiColor, Styles};
 use clap::{ArgAction, ColorChoice, CommandFactory, FromArgMatches, Parser};
 use std::io::IsTerminal as _;
 use std::path::PathBuf;
@@ -9,8 +10,23 @@ mod paths;
 mod safety;
 mod ui;
 
+// Palette de styles pour l'aide Clap (-h/--help)
+fn help_styles() -> Styles {
+    Styles::styled()
+        .usage(AnsiColor::Yellow.on_default().bold())
+        .header(AnsiColor::Yellow.on_default().bold())
+        .literal(AnsiColor::Green.on_default()) // noms d'options --long/-s
+        .placeholder(AnsiColor::Cyan.on_default()) // <PLACEHOLDERS>
+}
+
 #[derive(Parser)]
-#[command(name = "nrip", version, about = "Safe rm with a graveyard", color = clap::ColorChoice::Auto)]
+#[command(
+    name = "nrip", 
+    version, 
+    about = "Safe rm with a graveyard", 
+    color = clap::ColorChoice::Auto, 
+    styles = help_styles()
+)]
 struct Cli {
     /// Files/dirs to remove (default action)
     #[arg(value_name = "PATHS", allow_hyphen_values = true)]

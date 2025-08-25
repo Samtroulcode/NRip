@@ -346,6 +346,14 @@ pub fn bury(paths: &[PathBuf], force: bool) -> Result<()> {
                 deleted_at: Utc::now().timestamp(),
                 kind,
             });
+            // Petit retour utilisateur : "<name> buried" avec icône
+            let name = base.to_string_lossy();
+            // Couleurs sobres (gérées par yansi::enable/disable dans main.rs)
+            println!(
+                "{} {}",
+                Paint::new("🪦").fg(Color::Magenta),
+                Paint::new(format!("{name} buried")).bold()
+            );
         }
         Ok(())
     })
