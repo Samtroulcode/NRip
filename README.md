@@ -4,7 +4,7 @@
 
 Inspired by [rip](https://github.com/nivekuil/rip) — hence the binary name `nrip` (new rip).
 
-**MVP v0.7.3**: `--prune`, `--list`, `--resurrect`, and contextual shell completion.
+**MVP v0.8.0**: `--prune`, `--list`, `--resurrect`, contextual shell completion, **interactive picker (fzf)**.
 
 > **Default paths (XDG)**
 >
@@ -30,6 +30,14 @@ cargo install nrip
 ```
 
 ### From source
+
+**Runtime dependency**
+
+Interactive `-p/--prune` and `-r/--resurrect` require [`fzf`](https://github.com/junegunn/fzf).
+
+* Arch: `pacman -S fzf`
+* Debian/Ubuntu: `sudo apt install fzf`
+* macOS (Homebrew): `brew install fzf`
 
 ```bash
 git clone https://github.com/Samtroulcode/NRip
@@ -95,7 +103,7 @@ Options:
 * **Prune (permanent deletion):**
 
   ```bash
-  nrip -p               # interactive menu (0=ALL, 1..N)
+  nrip -p               # FZF interactive menu
   nrip -p foo           # target by basename substring or ID prefix
   nrip -p --dry-run     # simulate
   nrip -p -y            # delete without confirmation (dangerous)
@@ -104,7 +112,7 @@ Options:
 * **Resurrect (restore):**
 
   ```bash
-  nrip -r               # interactive menu (0=ALL, 1..N)
+  nrip -r               # FZF interactive menu
   nrip -r foo           # target by basename substring or ID prefix
   nrip -r --dry-run     # simulate
   nrip -r -y            # restore without confirmation
@@ -115,6 +123,13 @@ Options:
 > **Matching rules (for prune/resurrect)**
 > `TARGET` can be a **substring of the basename** or a **prefix of the short ID** (the 7 chars printed by `-l`).
 > Without `TARGET`, an **interactive picker** is displayed (0=ALL).
+
+### Interactive picker (fzf)
+
+When `-p/--prune` or `-r/--resurrect` are used **without a TARGET**, NRip opens an `fzf` picker:
+* **Multi-select** with **Tab** (press Tab repeatedly, Enter to confirm). :contentReference[oaicite:2]{index=2}
+* Displayed fields: timestamp, original path, `->`, trashed path (index hidden via `--with-nth`). :contentReference[oaicite:3]{index=3}
+* Output is parsed with **`--print0`** to handle arbitrary characters safely. :contentReference[oaicite:4]{index=4}
 
 ---
 
