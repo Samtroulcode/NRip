@@ -7,8 +7,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
-const APP_DIR: &str = env!("CARGO_PKG_NAME");
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entry {
     pub original_path: PathBuf,
@@ -21,25 +19,10 @@ pub struct Index {
     pub items: Vec<Entry>,
 }
 
-fn data_home() -> PathBuf {
-    if let Some(dir) = dirs::data_dir() {
-        dir
-    } else {
-        let home = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."));
-        home.join(".local").join("share")
-    }
-}
-
-fn index_path() -> PathBuf {
-    data_home().join(APP_DIR).join("index.json")
-}
-
 fn index_paths() -> Result<(PathBuf, PathBuf, PathBuf)> {
-    let data_dir = crate::paths::data_dir()?; // adapte si besoin
-    let idx_dir = index_path().parent().map(PathBuf::from).unwrap_or(data_dir);
-    let gy_dir = idx_dir.join("graveyard");
+    let data_dir = crate::paths::data_dir()?;
+    let idx_dir = data_dir.clone();
+    let gy_dir = data_dir.join("graveyard");
     let idx = idx_dir.join("index.json");
     fs::create_dir_all(&gy_dir)?;
     Ok((idx, idx_dir, gy_dir))
@@ -112,4 +95,51 @@ pub fn basename_of_original(e: &Entry) -> String {
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default()
+}
+
+pub fn with_index_mut<F, T>(mut f: F) -> Result<T>
+where
+    F: FnMut(&mut Index) -> Result<T>,
+{
+    let (idx_path, dir, _) = index_paths()?;
+    fs::create_dir_all(&dir)?;
+
+    // Un seul lock pour la durée de vie de la transaction
+    let lockf = fs::File::create(lock_path(&dir)).context("create lock file")?;
+    let mut lock = RwLock::new(lockf);
+    let _guard = lock.write().context("lock index for update")?;
+
+    // read (si existe)
+    let mut idx = if idx_path.exists() {
+        let data = fs::read(&idx_path).with_context(|| format!("read {}", idx_path.display()))?;
+        json::from_slice(&data).with_context(|| format!("parse {}", idx_path.display()))?
+    } else {
+        Index::default()
+    };
+
+    // user mutation
+    let out = f(&mut idx)?;
+
+    // write atomique
+    let mut tmp = NamedTempFile::new_in(&dir).context("mkstemp in index dir")?;
+    let buf = serde_json::to_vec_pretty(&idx).context("serialize index")?;
+    tmp.write_all(&buf).context("write tmp")?;
+    tmp.as_file().sync_all().context("fsync tmp")?;
+    let tmp_path = tmp.into_temp_path();
+    tmp_path.persist(&idx_path).map_err(|e| {
+        anyhow::anyhow!(
+            "rename {} -> {}: {}",
+            e.path.display(),
+            idx_path.display(),
+            e.error
+        )
+    })?;
+
+    #[cfg(unix)]
+    {
+        use rustix::fs::{Mode, OFlags, open};
+        let df = open(&dir, OFlags::RDONLY | OFlags::DIRECTORY, Mode::empty())?;
+        rustix::fs::fdatasync(&df)?;
+    }
+    Ok(out)
 }
