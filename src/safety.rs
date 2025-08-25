@@ -1,4 +1,3 @@
-// src/safety.rs
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,12 +62,11 @@ pub fn classify_forbid(p: &Path, ctx: &SafetyCtx) -> Option<Forbid> {
 
 pub fn guard_path(p: &Path, ctx: &SafetyCtx) -> anyhow::Result<()> {
     if let Some(reason) = classify_forbid(p, ctx) {
-        // Root reste non contournable si preserve_root=true.
         let can_bypass = ctx.force && !matches!(reason, Forbid::Root);
         if !can_bypass {
             use anyhow::bail;
             let msg = match reason {
-                Forbid::Root => "refusé: / est protégé (utilisez --no-preserve-root pour forcer)",
+                Forbid::Root => "refusé: / est protégé (non contournable)",
                 Forbid::Dot => "refusé: '.' n'est pas autorisé",
                 Forbid::DotDot => "refusé: '..' n'est pas autorisé",
                 Forbid::GraveyardItself => "refusé: cible = graveyard lui-même",
