@@ -6,6 +6,7 @@ mod fs_safemove;
 mod graveyard;
 mod index;
 mod paths;
+mod ui;
 
 #[derive(Parser)]
 #[command(name = "nrip", version, about = "Safe rm with a graveyard")]

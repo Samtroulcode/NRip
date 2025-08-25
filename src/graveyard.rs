@@ -102,7 +102,7 @@ pub fn resurrect_cmd(target: Option<String>, dry_run: bool, yes: bool) -> anyhow
 
     let entries = index::load_entries().unwrap_or_default();
 
-    // 1) Construire la sélection (to_restore) comme pour prune
+    // 1) Construire la sélection (to_restore)
     let to_restore: Vec<index::Entry> = if let Some(ref q0) = target {
         let q = q0.to_lowercase();
 
@@ -130,43 +130,24 @@ pub fn resurrect_cmd(target: Option<String>, dry_run: bool, yes: bool) -> anyhow
         }
         matches
     } else {
-        // --- MODE INTERACTIF (symétrique à prune) ---
-        if entries.is_empty() {
+        // --- MODE INTERACTIF (fzf) ---
+        let idx = index::load_index()?;
+        if idx.items.is_empty() {
             println!("Graveyard is empty.");
             return Ok(());
         }
-        println!("Select an item to restore or choose 0) ALL:");
-        println!("  0) ALL");
-        for (i, e) in entries.iter().enumerate() {
-            let id = display_id(e);
-            let base = index::basename_of_original(e);
-            println!(
-                "{:3}) {:7}  {}  ({})",
-                i + 1,
-                id,
-                base,
-                e.original_path.display()
-            );
-        }
-        print!("Choice [0=ALL, q=cancel]: ");
-        io::stdout().flush()?;
-        let mut buf = String::new();
-        io::stdin().read_line(&mut buf)?;
-        let s = buf.trim().to_lowercase();
-        if s == "q" || s.is_empty() {
+
+        let picks = crate::ui::pick_entries_with_fzf(&idx, /*preview=*/ false)?;
+        if picks.is_empty() {
             println!("Aborted.");
             return Ok(());
         }
-        if s == "0" {
-            entries.clone() // ALL
-        } else {
-            let sel: usize = s.parse().unwrap_or(usize::MAX);
-            if sel == 0 || sel > entries.len() {
-                println!("Invalid choice.");
-                return Ok(());
-            }
-            vec![entries[sel - 1].clone()]
-        }
+
+        let to_restore: Vec<index::Entry> =
+            picks.into_iter().map(|i| idx.items[i].clone()).collect();
+
+        // on “remplace” la variable to_restore de ton flux actuel :
+        to_restore
     };
 
     // 2) Bilan & confirmations
@@ -309,43 +290,23 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
         }
         matches
     } else {
-        // --- MODE INTERACTIF ---
-        if entries.is_empty() {
+        // --- MODE INTERACTIF (fzf) ---
+        let idx = index::load_index()?;
+        if idx.items.is_empty() {
             println!("Graveyard is empty.");
             return Ok(());
         }
-        println!("Select an item to delete or choose 0) ALL:");
-        println!("  0) ALL");
-        for (i, e) in entries.iter().enumerate() {
-            let id = display_id(e);
-            let base = index::basename_of_original(e);
-            println!(
-                "{:3}) {:7}  {}  ({})",
-                i + 1,
-                id,
-                base,
-                e.original_path.display()
-            );
-        }
-        print!("Choice [0=ALL, q=cancel]: ");
-        io::stdout().flush()?;
-        let mut buf = String::new();
-        io::stdin().read_line(&mut buf)?;
-        let s = buf.trim().to_lowercase();
-        if s == "q" || s.is_empty() {
+
+        let picks = crate::ui::pick_entries_with_fzf(&idx, /*preview=*/ false)?;
+        if picks.is_empty() {
             println!("Aborted.");
             return Ok(());
         }
-        if s == "0" {
-            entries.clone() // ALL
-        } else {
-            let sel: usize = s.parse().unwrap_or(usize::MAX);
-            if sel == 0 || sel > entries.len() {
-                println!("Invalid choice.");
-                return Ok(());
-            }
-            vec![entries[sel - 1].clone()]
-        }
+
+        let to_delete: Vec<index::Entry> =
+            picks.into_iter().map(|i| idx.items[i].clone()).collect();
+
+        to_delete
     };
 
     // 2) Bilan et confirmations
