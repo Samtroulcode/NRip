@@ -1,6 +1,6 @@
 # NRip
 
-**NRip** is a *safe* replacement for `rm`: instead of permanently deleting files, it moves them to a **graveyard** from which you can **list**, **prune** (permanently delete), or **resurrect** (restore).
+**NRip** is a *safe* replacement for `rm`: instead of permanently deleting files, it moves them to a **graveyard** from which you can **list**, **prune** (permanently delete), or **resurrect** (restore), with **fzf** feature.
 
 Inspired by [rip](https://github.com/nivekuil/rip) — hence the binary name `nrip` (new rip).
 
@@ -127,6 +127,7 @@ Options:
 ### Interactive picker (fzf)
 
 When `-p/--prune` or `-r/--resurrect` are used **without a TARGET**, NRip opens an `fzf` picker:
+
 * **Multi-select** with **Tab** (press Tab repeatedly, Enter to confirm). :contentReference[oaicite:2]{index=2}
 * Displayed fields: timestamp, original path, `->`, trashed path (index hidden via `--with-nth`). :contentReference[oaicite:3]{index=3}
 * Output is parsed with **`--print0`** to handle arbitrary characters safely. :contentReference[oaicite:4]{index=4}
