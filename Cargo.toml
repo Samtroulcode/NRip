@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 description = "Safe rm with a graveyard (MVP: rm, ls, prune, resurrect)"
 repository = "https://forgejo.dirty-flix-servarr.fr:2222/Samda/NRip.git"
 homepage = "https://github.com/Samtroulcode/NRip"
-keywords = ["cli", "rm", "safe", "trash", "fzf", "recycle"]
+keywords = ["cli", "rm", "safe", "trash", "fzf"]
 categories = ["command-line-utilities"]
 
 [dependencies]
