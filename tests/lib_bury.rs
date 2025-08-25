@@ -56,8 +56,7 @@ fn bury_twice_same_basename_produces_distinct_targets() -> Result<(), Box<dyn st
     }
     assert!(
         trashed.len() >= 2,
-        "on attend >=2 entrées dup.txt, got {:?}",
-        trashed
+        "on attend >=2 entrées dup.txt, got {trashed:?}",
     );
     let mut unique = trashed.clone();
     unique.sort();

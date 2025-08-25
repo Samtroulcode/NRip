@@ -125,4 +125,3 @@ pub fn safe_move_unique(src: &Path, dst_dir: &Path, basename: &OsString) -> Resu
         Err(e) => Err(e).with_context(|| format!("rename {} -> {}", src.display(), dst.display())),
     }
 }
-

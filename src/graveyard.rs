@@ -110,16 +110,16 @@ pub fn resurrect_cmd(target: Option<String>, dry_run: bool, yes: bool) -> anyhow
 
         let matches: Vec<index::Entry> = entries
             .iter()
-            .cloned()
-            .filter(|e| {
+            .filter(|&e| {
                 let base = index::basename_of_original(e).to_lowercase();
-                let id = display_id(e).to_lowercase(); // id dérivé
+                let id = display_id(e).to_lowercase(); // derived id
                 base.contains(&q) || id.starts_with(&q)
             })
+            .cloned()
             .collect();
 
         if matches.is_empty() {
-            println!("No graveyard entry matches '{}'.", q0);
+            println!("No graveyard entry matches '{q0}'.");
             return Ok(());
         }
         if matches.len() > 1 && !yes {
@@ -327,16 +327,15 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
         let matches: Vec<index::Entry> = snap
             .items
             .iter()
-            .cloned()
-            .filter(|e| {
+            .filter(|&e| {
                 let base = index::basename_of_original(e).to_lowercase();
                 let id = display_id(e).to_lowercase();
                 base.contains(&q) || id.starts_with(&q)
             })
+            .cloned()
             .collect();
-
         if matches.is_empty() {
-            println!("No graveyard entry matches '{}'.", q0);
+            println!("No graveyard entry matches '{q0}'.");
             return Ok(());
         }
         if matches.len() > 1 && !yes {
