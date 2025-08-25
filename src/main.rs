@@ -44,6 +44,7 @@ struct Cli {
     #[arg(short = 'l', long = "list")]
     list: bool,
 
+    /// Simulation (ni changes)
     #[arg(long)]
     dry_run: bool,
 

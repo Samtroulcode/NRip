@@ -190,7 +190,6 @@ complete -F _nrip_complete nrip
 
 ## Troubleshooting
 
-* **Version mismatch in `nrip -V`**: ensure the `Cargo.toml` in the tagged source actually contains the intended `version` (that value is embedded by Cargo at build time).
 * **Cross-device moves**: seeing a cross-device fallback is expected when source and graveyard live on different filesystems; NRip copies then removes.
 
 ---

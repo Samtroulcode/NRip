@@ -39,7 +39,7 @@ fn append_journal(line: &str) -> Result<()> {
     use std::io::Write;
     let jp = journal_path()?;
     let mut f = fs::OpenOptions::new().create(true).append(true).open(&jp)?;
-    writeln!(f, "{}", line)?;
+    writeln!(f, "{line}")?;
     f.sync_all()?;
     Ok(())
 }
