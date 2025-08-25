@@ -1,15 +1,52 @@
 # NRip
 
-**nrip** is a *safe* replacement for `rm`: instead of permanently deleting files, it moves them to a **graveyard** from which you can **list**, **prune** (permanently delete), or **resurrect** (restore), with **fzf** feature.
+> **neo rip** — a safe replacement for `rm` that sends your files to the **graveyard**. Bury now, decide later. If you like living dangerously, there’s always the crematorium.
 
-Inspired by [rip](https://github.com/nivekuil/rip) — hence the binary name `nrip` (new rip).
+<p align="center">
+  <img src="assets/img/tombstone.svg" width="120" alt="NRip tombstone"/>
+</p>
 
-**MVP v0.8.8**: `--prune`, `--list`, `--resurrect`, contextual shell completion, **interactive picker (fzf)**.
+---
+
+NRip moves files/dirs to a **graveyard** instead of deleting them. You can then **list**, **cremate** (permanently delete), or **resurrect** them — interactively with **fzf** or non‑interactively by targeting a basename substring or an ID prefix.
+
+> Inspired by [rip](https://github.com/nivekuil/rip). Binary name: **nrip** (neo rip — a wink to nvim and rip).
 
 > **Default paths (XDG)**
 >
 > * **Graveyard**: `${XDG_DATA_HOME:-$HOME/.local/share}/nrip/graveyard`
 > * **Index**: `${XDG_DATA_HOME:-$HOME/.local/share}/nrip/index.json`
+
+## What you get (in the dead of night)
+
+* 🪦 **Bury** (default action): timestamped, unique names — no collisions among the dearly departed.
+* 🔎 **List**: readable output with age, kind, short IDs, and original path.
+* ⚰️ **Cremate**: permanently erase from the graveyard (interactive or targeted).
+* 🧟 **Resurrect**: bring files back to their old haunt; refuses to overwrite the living.
+* 🔗 **Cross‑FS aware**: falls back to copy→swap when `EXDEV` strikes.
+* ☠️ **Shell completion**: contextual suggestions for cremation and resurrection.
+
+> **Short IDs** — list view prints a 7‑char ID derived from the unique graveyard name. You can target **cremate**/**resurrect** using a basename substring *or* that ID prefix.
+
+---
+
+## Gloomy tour (screencasts)
+
+* **Bury** (default):
+
+  ![Bury demo](assets/gifs/nrip-bury.gif)
+
+* **List**: compact output with icons:
+
+  ![List demo](assets/gifs/nrip-list.gif)
+
+* **Cremate** (permanent deletion):
+
+  ![Cremate demo](assets/gifs/nrip-cremate.gif)
+
+* **Resurrect** (restore):
+
+  ![Resurrect demo](assets/gifs/nrip-resurrect.gif)
 
 ---
 
@@ -31,13 +68,11 @@ cargo install nrip
 
 ### From source
 
-**Runtime dependency**
-
-Interactive `-p/--prune` and `-r/--resurrect` require [`fzf`](https://github.com/junegunn/fzf).
-
-* Arch: `pacman -S fzf`
-* Debian/Ubuntu: `sudo apt install fzf`
-* macOS (Homebrew): `brew install fzf`
+> **Runtime dependency**: interactive **cremate/resurrect** requires [`fzf`](https://github.com/junegunn/fzf).
+>
+> * Arch: `pacman -S fzf`
+> * Debian/Ubuntu: `sudo apt install fzf`
+> * macOS (Homebrew): `brew install fzf`
 
 ```bash
 git clone https://github.com/Samtroulcode/NRip
@@ -58,86 +93,71 @@ cargo build --release
 ## Usage
 
 ```
-Safe rm with a graveyard
-
 Usage: nrip [OPTIONS] [PATHS]...
 
 Arguments:
   [PATHS]...  Files/dirs to remove (default action)
 
 Options:
-  -p, --prune [<TARGET>]      Prune graveyard; optional TARGET value allows `-p TARGET`
-      --target <TARGET>       (optional) explicit target (used with --prune)
-  -r, --resurrect [<TARGET>]  Resurrect (restore) from graveyard; optional TARGET allows `-r TARGET`
+  -c, --cremate [<TARGET>]    Permanently remove from graveyard
+  -r, --resurrect [<TARGET>]  Resurrect (restore) from graveyard
+      --target <TARGET>       (optional) explicit target (used with --cremate/--resurrect)
+  -f, --force                 (optional) force
   -l, --list                  List graveyard contents
-      --dry-run               Simulation (no changes)
-  -y, --yes                   Skip interactive confirmations
+      --dry-run               Dry run (no changes)
+  -y, --yes                   (optional) skip confirmation prompts
   -h, --help                  Print help
   -V, --version               Print version
 ```
 
-### Basic actions
+### Basic rites
 
-* **Bury (default action):**
+**Bury (default action)**
 
-  ```bash
-  nrip file1 dir2
-  ```
+```bash
+nrip file1 dir2
+```
 
-  Items are moved to the graveyard under a **unique name**:
-  `YYYYMMDDTHHMMSS__RANDOM__basename`.
+The deceased are moved to the graveyard under a **unique name**:
+`YYYYMMDDTHHMMSS__RANDOM__basename`.
 
-* **List:**
+**List the dearly departed**
 
-  ```bash
-  nrip -l
-  ```
+```bash
+nrip -l
+```
 
-  For each entry it shows:
+Shows short **ID**, timestamp, age, type icon, basename, and original path.
 
-  * a short **ID** (first 7 chars of `RANDOM`),
-  * the `deleted_at` timestamp,
-  * the `basename`,
-  * the original path.
+**Cremate (permanent deletion)**
 
-* **Prune (permanent deletion):**
+```bash
+nrip -c               # FZF interactive menu
+nrip -c foo           # target by basename substring or ID prefix
+nrip -c --dry-run     # simulate
+nrip -c -y            # no prompts (the quick burn)
+```
 
-  ```bash
-  nrip -p               # FZF interactive menu
-  nrip -p foo           # target by basename substring or ID prefix
-  nrip -p --dry-run     # simulate
-  nrip -p -y            # delete without confirmation (dangerous)
-  ```
+> `--prune` remains available as a compatibility alias.
 
-* **Resurrect (restore):**
+**Resurrect (restore)**
 
-  ```bash
-  nrip -r               # FZF interactive menu
-  nrip -r foo           # target by basename substring or ID prefix
-  nrip -r --dry-run     # simulate
-  nrip -r -y            # restore without confirmation
-  ```
+```bash
+nrip -r               # FZF interactive menu
+nrip -r foo           # target by basename substring or ID prefix
+nrip -r --dry-run     # simulate
+nrip -r -y            # raise without confirmation
+```
 
-  Restoration is **non-destructive**: if the original destination already exists, restoration **fails** (no overwrite).
+> Restoration is **non‑destructive**: if the original destination already exists, NRip refuses to disturb the living.
 
-> **Matching rules (for prune/resurrect)**
-> `TARGET` can be a **substring of the basename** or a **prefix of the short ID** (the 7 chars printed by `-l`).
-> Without `TARGET`, an **interactive picker** is displayed (0=ALL).
-
-### Interactive picker (fzf)
-
-When `-p/--prune` or `-r/--resurrect` are used **without a TARGET**, NRip opens an `fzf` picker:
-
-* **Multi-select** with **Tab** (press Tab repeatedly, Enter to confirm). :contentReference[oaicite:2]{index=2}
-* Displayed fields: timestamp, original path, `->`, trashed path (index hidden via `--with-nth`). :contentReference[oaicite:3]{index=3}
-* Output is parsed with **`--print0`** to handle arbitrary characters safely. :contentReference[oaicite:4]{index=4}
+> **Matching rules** — `TARGET` can be a **substring of the basename** or a **prefix of the short ID**. Without `TARGET`, an **interactive picker** (fzf) is displayed.
 
 ---
 
 ## Shell completion
 
-NRip exposes a hidden completion endpoint used by the functions below:
-`nrip --__complete <context> <prefix>` where `<context>` is `prune` or `resurrect`.
+Hidden completion endpoint: `nrip --__complete <context> <prefix>` where `<context>` is `cremate|prune` or `resurrect`.
 
 ### Zsh
 
@@ -148,7 +168,7 @@ _nrip_complete() {
   cur=${words[-1]}
   prev=${words[-2]}
 
-  if [[ $prev == "-p" || $prev == "--prune" ]]; then
+  if [[ $prev == "-c" || $prev == "--cremate" || $prev == "--prune" ]]; then
     compadd -- ${(f)"$(nrip --__complete prune "$cur")"}
     return 0
   elif [[ $prev == "-r" || $prev == "--resurrect" ]]; then
@@ -170,7 +190,7 @@ _nrip_complete() {
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-  if [[ "$prev" == "-p" || "$prev" == "--prune" ]]; then
+  if [[ "$prev" == "-c" || "$prev" == "--cremate" || "$prev" == "--prune" ]]; then
     mapfile -t COMPREPLY < <(nrip --__complete prune "$cur")
   elif [[ "$prev" == "-r" || "$prev" == "--resurrect" ]]; then
     mapfile -t COMPREPLY < <(nrip --__complete resurrect "$cur")
@@ -181,35 +201,68 @@ complete -F _nrip_complete nrip
 
 ---
 
-## How it works (robustness & safety)
+## Under the slab (how it works)
 
-* **Atomic move when possible**: NRip first tries an atomic `rename(2)` to move the file/dir into the graveyard. If the move crosses filesystems (`EXDEV`), it falls back to **copy then remove**.
+* **Atomic move first** — attempt `rename(2)`; on cross‑device (`EXDEV`), use copy → swap → remove.
+* **Durability** — directory entries are synced to keep the graveyard from losing corpses on power loss.
+* **Index** — `index.json` tracks original/trashed paths, timestamps, and kind; guarded by a lock to prevent concurrent corruption.
+* **Journal** — `.journal` notes `PENDING/DONE` and `RESTORE_*` events for basic forensics.
+* **Symlinks** — preserved during recursive operations when applicable.
 
-* **Durability**: after writing/renaming, the parent directory is `fdatasync`’d to ensure directory entries are persisted.
-
-* **Index file**: `index.json` tracks original/trashed paths and timestamps. It is read/written under an advisory lock to avoid corruption across concurrent NRip processes.
-
-* **Journal**: a plain-text `.journal` logs `PENDING/DONE` and `RESTORE_*` events for basic auditing and recovery hints.
-
-* **Symlinks**: preserved (copied as links) during recursive operations when applicable.
-
-> **Security note**: NRip is a user-space trash bin. It does **not** perform secure shredding/erasure.
+> **Security note** — NRip is a user‑space trash bin. It does **not** perform secure shredding.
 
 ---
 
-## Environment & version
+## Roadmap of horrors (configuration)
 
-* **Paths** honor `XDG_DATA_HOME` (fallback to `$HOME/.local/share`).
-* `nrip -V` prints the Cargo package version used at build time.
+Planned `~/.config/nrip/config.toml` keys:
+
+```toml
+# Change the graveyard location
+graveyard_dir = "/data/nrip/graveyard"
+
+# Customize list format (order, fields, colors)
+list.format = "{id} {icon} {kind} {deleted_at} {age} {basename} {original_path}"
+
+# FZF preview command used for interactive modes
+fzf.preview = "ls -l --color=always {trashed_path} || tree -C {trashed_path}"
+
+# Confirmation policy
+confirm.resurrect = true
+confirm.cremate_all = "type-YES"
+```
+
+Knobs to expect:
+
+* `graveyard_dir`
+* `list.format` / `list.time_format`
+* `fzf.preview` / `fzf.height`
+* `color = auto|always|never` (honors `NO_COLOR`)
 
 ---
 
-## Troubleshooting
+## FAQ from beyond
 
-* **Cross-device moves**: seeing a cross-device fallback is expected when source and graveyard live on different filesystems; NRip copies then removes.
+**What if the destination exists during resurrection?**  NRip refuses to overwrite; the living stay undisturbed.
+
+**Cross‑device moves?**  On `EXDEV`, NRip copies to a temp in the graveyard, syncs, swaps into place, removes the source.
+
+**Disable colors?**  Set `NO_COLOR=1` or pipe; NRip auto‑detects TTY.
+
+**Uninstall**
+
+* Cargo: `cargo uninstall nrip`
+* AUR: `yay -Rns nrip`
+* Optional: nuke `${XDG_DATA_HOME:-$HOME/.local/share}/nrip/`
+
+---
+
+## Contributing
+
+Before opening a coffin—err, PR—please run `cargo fmt`, `cargo clippy -D warnings`, and `cargo test`.
 
 ---
 
 ## License
 
-Dual-licensed under **MIT** and **Apache-2.0** (see `LICENSE*`).
+Dual‑licensed under **MIT** and **Apache‑2.0**. See `LICENSE*`.
