@@ -47,6 +47,8 @@ pub fn load_index() -> Result<Index> {
     Ok(index)
 }
 
+// API legacy, optionnelle
+#[cfg(feature = "legacy_api")]
 pub fn save_index(idx: &Index) -> Result<()> {
     let (idx_path, dir, _) = index_paths()?;
     fs::create_dir_all(&dir)?;
@@ -83,6 +85,8 @@ pub fn load_entries() -> Result<Vec<Entry>> {
     Ok(load_index()?.items)
 }
 
+// API legacy, optionnelle
+#[cfg(feature = "legacy_api")]
 pub fn save_entries(entries: &Vec<Entry>) -> Result<()> {
     let mut idx = load_index().unwrap_or_default();
     idx.items = entries.clone();

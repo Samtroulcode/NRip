@@ -33,3 +33,6 @@ proptest = "1"
 rstest = "0.26"
 serial_test = "3"
 which = "8"
+
+[features]
+legacy_api = []
