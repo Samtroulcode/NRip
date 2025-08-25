@@ -3,15 +3,7 @@ use chrono::{Local, TimeZone};
 use std::process::{Command, Stdio};
 
 use crate::index::{Index, Kind};
-
-fn kind_letter(k: Kind) -> char {
-    match k {
-        Kind::File => 'F',
-        Kind::Dir => 'D',
-        Kind::Symlink => 'L',
-        Kind::Other => '?',
-    }
-}
+use yansi::{Color, Paint};
 
 fn human_when(ts: i64) -> String {
     // Date locale courte (pour fzf)
@@ -45,12 +37,16 @@ fn build_fzf_lines(idx: &Index) -> Vec<String> {
                 .and_then(|s| s.to_str())
                 .unwrap_or("")
                 .to_string();
+            // Champ 0 (index) ***NON COLORÉ*** pour le parse
+            let icon_p = Paint::new(icon).fg(Color::Cyan).to_string();
+            let date_p = Paint::new(human_when(e.deleted_at)).dim().to_string();
+            let base_p = Paint::new(base).bold().to_string();
             format!(
                 "{}\t{}\t{}\t{}\t{}\t{}",
                 i,
-                icon,
-                human_when(e.deleted_at),
-                base,
+                icon_p,
+                date_p,
+                base_p,
                 e.original_path.display(),
                 e.trashed_path.display()
             )

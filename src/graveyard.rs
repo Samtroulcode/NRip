@@ -9,6 +9,7 @@ use anyhow::{Context, Result};
 use chrono::{Local, TimeZone, Utc};
 use fs_err as fs;
 use std::ffi::OsString;
+use yansi::{Color, Paint};
 
 use crate::fs_safemove::safe_move_unique;
 use crate::safety::{SafetyCtx, guard_path};
@@ -43,25 +44,18 @@ fn kind_icon(k: Kind) -> &'static str {
 }
 
 /// Durée compacte (2 unités max) ex: "1m47s", "3h12m", "2d"
-fn compact_age(secs: u64) -> String {
+fn compact_age(mut secs: u64) -> String {
     const MIN: u64 = 60;
     const H: u64 = 60 * MIN;
     const D: u64 = 24 * H;
     const W: u64 = 7 * D;
-    let mut n = secs;
-    if n < MIN {
-        return format!("{n}s");
-    }
+    let units = [(W, "w"), (D, "d"), (H, "h"), (MIN, "m"), (1, "s")];
     let mut out = String::new();
     let mut parts = 0;
-    let units = [(W, "w"), (D, "d"), (H, "h"), (MIN, "m"), (1, "s")];
-    for (unit, suf) in units {
-        if n >= unit {
-            let v = n / unit;
-            n %= unit;
-            if parts > 0 {
-                out.push_str("");
-            }
+    for (u, suf) in units {
+        if secs >= u {
+            let v = secs / u;
+            secs %= u;
             out.push_str(&format!("{v}{suf}"));
             parts += 1;
             if parts == 2 {
@@ -69,7 +63,7 @@ fn compact_age(secs: u64) -> String {
             }
         }
     }
-    out
+    if out.is_empty() { "0s".into() } else { out }
 }
 
 fn graveyard_dir() -> Result<PathBuf> {
@@ -376,16 +370,17 @@ pub fn list() -> anyhow::Result<()> {
         let rel = compact_age(now_secs.saturating_sub(e.deleted_at as u64));
         let k = kind_letter(e.kind);
         let ico = kind_icon(e.kind);
-        println!(
-            "{:7}  {} {}  ({})  {}  {} ({})",
-            id,
-            ico,
-            k,
-            absolute,
-            base,
-            e.original_path.display(),
-            rel
-        );
+
+        // Couleurs sobres (respectées/neutralisées par yansi::enable/disable dans main.rs)
+        let id_p = Paint::new(format!("{id:7}")).dim();
+        let icon_p = Paint::new(ico).fg(Color::Cyan);
+        let k_p = Paint::new(k).fg(Color::Cyan);
+        let date_p = Paint::new(format!("({absolute})")).dim();
+        let name_p = Paint::new(base).bold();
+        let path_p = Paint::new(e.original_path.display()).dim();
+        let age_p = Paint::new(format!("({rel})")).italic().dim();
+
+        println!("{id_p}  {icon_p} {k_p}  {date_p}  {name_p}  {path_p}  {age_p}");
     }
     Ok(())
 }
@@ -550,7 +545,7 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
                     };
                 }
             }
-            remaining.clear(); // au cas où
+            remaining.resetting();
         }
 
         idx.items = remaining;
