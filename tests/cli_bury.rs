@@ -1,9 +1,12 @@
 use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
 use predicates::prelude::*;
+use serial_test::serial;
 use std::process::Command;
+mod util;
 
 #[test]
+#[serial]
 fn bury_moves_file_to_graveyard_and_updates_index() -> Result<(), Box<dyn std::error::Error>> {
     let tmp = assert_fs::TempDir::new()?;
     let file = tmp.child("hello.txt");
@@ -11,7 +14,7 @@ fn bury_moves_file_to_graveyard_and_updates_index() -> Result<(), Box<dyn std::e
 
     // On isole GRAVEYARD/INDEX via XDG_DATA_HOME
     let data = tmp.child(".local/share");
-    std::env::set_var("XDG_DATA_HOME", data.path());
+    util::set_var("XDG_DATA_HOME", data.path());
 
     Command::cargo_bin("nrip")? // auto-résolution du binaire de ce crate
         .arg(file.path())

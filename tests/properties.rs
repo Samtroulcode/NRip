@@ -2,6 +2,7 @@ use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
 use proptest::prelude::*;
 use serial_test::serial;
+mod util;
 
 proptest! {
   #![proptest_config(ProptestConfig::with_cases(64))]
@@ -12,9 +13,9 @@ proptest! {
     let src = tmp.child(&file_name);
     src.write_str("data").unwrap();
 
-    std::env::set_var("HOME", tmp.path());
-    std::env::set_var("XDG_DATA_HOME", tmp.child(".xdg/data").path());
-    std::env::set_var("XDG_CONFIG_HOME", tmp.child(".xdg/config").path());
+    util::set_var("HOME", tmp.path());
+    util::set_var("XDG_DATA_HOME", tmp.child(".xdg/data").path());
+    util::set_var("XDG_CONFIG_HOME", tmp.child(".xdg/config").path());
 
     std::process::Command::cargo_bin("nrip").unwrap()
         .arg(src.path())
@@ -29,3 +30,4 @@ proptest! {
     src.assert(predicates::path::exists());
   }
 }
+
