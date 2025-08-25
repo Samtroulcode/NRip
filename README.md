@@ -1,6 +1,6 @@
 # NRip
 
-**NRip** is a *safe* replacement for `rm`: instead of permanently deleting files, it moves them to a **graveyard** from which you can **list**, **prune** (permanently delete), or **resurrect** (restore), with **fzf** feature.
+**nrip** is a *safe* replacement for `rm`: instead of permanently deleting files, it moves them to a **graveyard** from which you can **list**, **prune** (permanently delete), or **resurrect** (restore), with **fzf** feature.
 
 Inspired by [rip](https://github.com/nivekuil/rip) — hence the binary name `nrip` (new rip).
 
