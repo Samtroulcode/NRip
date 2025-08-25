@@ -1,9 +1,9 @@
+use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path;
 use std::path::PathBuf;
 
 use crate::index::Entry;
-use std::collections::HashSet;
 
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -39,6 +39,19 @@ fn append_journal(line: &str) -> Result<()> {
     writeln!(f, "{line}")?;
     f.sync_all()?;
     Ok(())
+}
+
+fn path_depth(p: &std::path::Path) -> usize {
+    p.components().count()
+}
+
+///build a map from original_path -> (index position)
+fn build_original_map(entries: &[index::Entry]) -> HashMap<PathBuf, usize> {
+    let mut map = HashMap::with_capacity(entries.len());
+    for (i, e) in entries.iter().enumerate() {
+        map.insert(e.original_path.clone(), i);
+    }
+    map
 }
 
 pub fn resurrect(items: &[PathBuf]) -> Result<()> {
@@ -89,6 +102,7 @@ pub fn resurrect_cmd(target: Option<String>, dry_run: bool, yes: bool) -> anyhow
     use std::io::{self, Write};
 
     let entries = index::load_entries().unwrap_or_default();
+    let original_map = build_original_map(&entries);
 
     // 1) Construire la sélection (to_restore)
     let to_restore: Vec<index::Entry> = if let Some(ref q0) = target {
@@ -137,14 +151,66 @@ pub fn resurrect_cmd(target: Option<String>, dry_run: bool, yes: bool) -> anyhow
         // on “remplace” la variable to_restore de ton flux actuel :
         to_restore
     };
+    // 1.b) Etendre la sélection : ajouter les parents enterrés nécessaires
+    // (si un parent est lui-même dans le graveyard, on le restaure AVANT l'enfant)
+    let mut wanted: HashSet<PathBuf> = to_restore.iter().map(|e| e.original_path.clone()).collect();
+    let mut added_any = true;
+    while added_any {
+        added_any = false;
+        let current: Vec<PathBuf> = wanted.iter().cloned().collect();
+        for p in current {
+            if let Some(mut cur) = p.parent().map(|x| x.to_path_buf()) {
+                while cur.parent().is_some() {
+                    if original_map.contains_key(&cur) && !wanted.contains(&cur) {
+                        wanted.insert(cur.clone());
+                        added_any = true;
+                        break; // on insère ce parent; on regardera ses parents à l'itération suivante
+                    }
+                    if let Some(next) = cur.parent() {
+                        cur = next.to_path_buf();
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Reconstruire la liste finale d'entrées à restaurer (parents inclus)
+    let mut final_list: Vec<index::Entry> = Vec::with_capacity(wanted.len());
+    let mut auto_added: Vec<PathBuf> = Vec::new();
+    for p in &wanted {
+        if let Some(&i) = original_map.get(p) {
+            // si pas déjà dans to_restore explicite, on note qu'on l'a ajouté
+            if !to_restore.iter().any(|e| &e.original_path == p) {
+                auto_added.push(p.clone());
+            }
+            final_list.push(entries[i].clone());
+        }
+    }
+    // Trier par profondeur croissante (parents → enfants)
+    final_list.sort_by_key(|e| path_depth(&e.original_path));
+
+    if !auto_added.is_empty() {
+        println!(
+            "Including {} parent path(s) for consistency:",
+            auto_added.len()
+        );
+        for p in auto_added.iter().take(10) {
+            // évite le spam
+            println!("  {}", p.display());
+        }
+        if auto_added.len() > 10 {
+            println!("  ...");
+        }
+    }
 
     // 2) Bilan & confirmations
-    // (on peut estimer la taille à réécrire, mais ici on se contente du nombre)
-    let is_all = to_restore.len() == entries.len();
+    let is_all = final_list.len() == entries.len();
     if is_all {
         println!(
             "About to restore ALL graveyard items: {} item(s).",
-            to_restore.len()
+            final_list.len()
         );
         if dry_run {
             println!("--dry-run: nothing restored.");
@@ -179,7 +245,7 @@ pub fn resurrect_cmd(target: Option<String>, dry_run: bool, yes: bool) -> anyhow
     }
 
     // 3) Exécution
-    let paths: Vec<PathBuf> = to_restore.iter().map(|e| e.trashed_path.clone()).collect();
+    let paths: Vec<PathBuf> = final_list.iter().map(|e| e.trashed_path.clone()).collect();
     if paths.is_empty() {
         println!("Nothing to restore.");
         return Ok(());
