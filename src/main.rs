@@ -32,33 +32,34 @@ struct Cli {
     #[arg(value_name = "PATHS", allow_hyphen_values = true)]
     paths: Vec<PathBuf>,
 
-    /// Prune graveyard; optional TARGET value allows `-p TARGET`
+    /// Permanently remove from graveyard
     #[arg(
-        short = 'p',
-        long = "prune",
+        short = 'c',
+        long = "cremate",
         value_name = "TARGET",
         num_args = 0..=1,              // valeur optionnelle
         action = ArgAction::Set,       // important !
         conflicts_with = "paths"
     )]
-    prune: Option<Option<String>>, // <- Option<Option<...>>
+    cremate: Option<Option<String>>, // <- Option<Option<...>>
 
-    /// (optional) explicit target
-    #[arg(long = "target", requires = "prune")]
-    target: Option<String>,
-
-    /// Resurrect (restore) from graveyard; optional TARGET allows `-r TARGET`
+    /// Resurrect (restore) from graveyard
     #[arg(
         short = 'r',
         long = "resurrect",
         value_name = "TARGET",
         num_args = 0..=1,
         action = ArgAction::Set,
-        conflicts_with_all = ["paths", "prune", "target", "list"]
+        conflicts_with_all = ["paths", "cremate", "target", "list"]
     )]
     resurrect: Option<Option<String>>,
 
-    /// Force
+    /// (optional) explicit target (used with --cremate/--resurrect)
+    #[arg(long = "target", requires = "cremate")]
+    target: Option<String>,
+
+
+    /// (optional) force
     #[arg(short = 'f', long = "force")]
     force: bool,
 
@@ -66,7 +67,7 @@ struct Cli {
     #[arg(short = 'l', long = "list")]
     list: bool,
 
-    /// Dry run (ni changes)
+    /// Dry run (no changes)
     #[arg(long)]
     dry_run: bool,
 
@@ -106,7 +107,7 @@ fn main() -> anyhow::Result<()> {
         let context = cli.__complete[0].as_str();
         let prefix = cli.__complete.get(1).map(|s| s.as_str());
         match context {
-            "prune" | "resurrect" => {
+            "cremate" | "resurrect" => {
                 for s in graveyard::completion_candidates(prefix)? {
                     println!("{s}");
                 }
@@ -124,14 +125,14 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // PRUNE
-    if let Some(prune_opt) = cli.prune {
-        let target = match (cli.target, prune_opt) {
+    // CREMATE
+    if let Some(crem_opt) = cli.cremate {
+        let target = match (cli.target, crem_opt) {
             (Some(t), _) => Some(t),    // --target prioritaire
-            (None, Some(t)) => Some(t), // -p TARGET
-            (None, None) => None,       // -p (prune total)
+            (None, Some(t)) => Some(t), 
+            (None, None) => None,               
         };
-        graveyard::prune(target, cli.dry_run, cli.yes)?;
+        graveyard::cremate(target, cli.dry_run, cli.yes)?;
         return Ok(());
     }
 

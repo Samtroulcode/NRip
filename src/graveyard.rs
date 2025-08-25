@@ -393,8 +393,8 @@ pub fn list() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// `prune` sans cible = vider tout ; avec cible = supprimer les matches.
-pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result<()> {
+/// `cremate` sans cible = vider tout ; avec cible = supprimer les matches.
+pub fn cremate(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result<()> {
     // --- 1) SNAPSHOT & SÉLECTION (hors verrou) ---
     let snap = index::load_index()?; // snapshot
     if snap.items.is_empty() {
@@ -420,7 +420,7 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
             return Ok(());
         }
         if matches.len() > 1 && !yes {
-            println!("Multiple matches (use TAB completion or add -y to prune all of them):");
+            println!("Multiple matches (use TAB completion or add -y to cremate all of them):");
             for m in &matches {
                 let id = display_id(m);
                 println!("  {:7}  {}", id, index::basename_of_original(m));
@@ -564,7 +564,7 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
     Ok(())
 }
 
-/// Candidats pour l’auto-complétion de `prune` (basenames + IDs)
+/// Candidats pour l’auto-complétion de `cremate` (basenames + IDs)
 pub fn completion_candidates(prefix: Option<&str>) -> anyhow::Result<Vec<String>> {
     let entries = index::load_entries().unwrap_or_default();
     let mut out = Vec::with_capacity(entries.len() * 2);
