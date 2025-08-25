@@ -22,17 +22,35 @@ fn human_when(ts: i64) -> String {
     dt.format("%Y-%m-%d %H:%M").to_string()
 }
 
-/// Lignes pour fzf: "IDX \t DATE \t ORIGINAL \t -> \t TRASHED"
+fn kind_icon(k: Kind) -> &'static str {
+    match k {
+        Kind::File => "📄",
+        Kind::Dir => "📁",
+        Kind::Symlink => "🔗",
+        Kind::Other => "❔",
+    }
+}
+
+/// Lignes pour fzf (compactes):
+/// IDX \t ICON \t DATE \t BASENAME \t ORIGINAL \t TRASHED(HIDDEN)
 fn build_fzf_lines(idx: &Index) -> Vec<String> {
     idx.items
         .iter()
         .enumerate()
         .map(|(i, e)| {
+            let icon = kind_icon(e.kind);
+            let base = e
+                .original_path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
             format!(
-                "{}\t{}\t{}\t{}\t->\t{}",
+                "{}\t{}\t{}\t{}\t{}\t{}",
                 i,
-                kind_letter(e.kind),
+                icon,
                 human_when(e.deleted_at),
+                base,
                 e.original_path.display(),
                 e.trashed_path.display()
             )
@@ -55,7 +73,7 @@ pub fn pick_entries_with_fzf(idx: &Index, preview: bool) -> Result<Vec<usize>> {
         .arg("--ansi")
         .arg("--print0") // sortie NUL-delimitée
         .args(["--delimiter", "\t"]) // champs = tab
-        .args(["--with-nth", "3.."]) // masque l'IDX+KIND à l'affichage
+        .args(["--with-nth", "3,4,5"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped());
 
@@ -63,7 +81,7 @@ pub fn pick_entries_with_fzf(idx: &Index, preview: bool) -> Result<Vec<usize>> {
         // Aperçu simple: liste le chemin TRASHED (colonne après "->")
         cmd.args([
             "--preview",
-            r#"sh -c 'printf "%s\n" "$@" | awk -F"\t" "{for (i=1;i<=NF;i++) if (\$i==\"->\") { print \$(i+1); exit }}" | xargs -r ls -ld --'"#,
+            r#"sh -c 'printf "%s\n" "$@" | awk -F"\t" "{print \$NF}" | xargs -r ls -ld --'"#,
             "--preview-window=right:60%",
         ]);
     }

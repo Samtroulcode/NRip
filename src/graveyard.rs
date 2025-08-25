@@ -33,6 +33,45 @@ fn kind_letter(k: Kind) -> char {
     }
 }
 
+fn kind_icon(k: Kind) -> &'static str {
+    match k {
+        Kind::File => "📄",
+        Kind::Dir => "📁",
+        Kind::Symlink => "🔗",
+        Kind::Other => "❔",
+    }
+}
+
+/// Durée compacte (2 unités max) ex: "1m47s", "3h12m", "2d"
+fn compact_age(secs: u64) -> String {
+    const MIN: u64 = 60;
+    const H: u64 = 60 * MIN;
+    const D: u64 = 24 * H;
+    const W: u64 = 7 * D;
+    let mut n = secs;
+    if n < MIN {
+        return format!("{n}s");
+    }
+    let mut out = String::new();
+    let mut parts = 0;
+    let units = [(W, "w"), (D, "d"), (H, "h"), (MIN, "m"), (1, "s")];
+    for (unit, suf) in units {
+        if n >= unit {
+            let v = n / unit;
+            n %= unit;
+            if parts > 0 {
+                out.push_str("");
+            }
+            out.push_str(&format!("{v}{suf}"));
+            parts += 1;
+            if parts == 2 {
+                break;
+            }
+        }
+    }
+    out
+}
+
 fn graveyard_dir() -> Result<PathBuf> {
     Ok(crate::paths::data_dir()?.join("graveyard"))
 }
@@ -329,16 +368,18 @@ pub fn list() -> anyhow::Result<()> {
             .single()
             .unwrap_or_else(|| Local.timestamp_opt(0, 0).single().unwrap());
         let absolute = dt.format("%Y-%m-%d %H:%M:%S").to_string();
-        // âge relatif (ex: "3m 12s")
-        let now = std::time::SystemTime::now()
+        // âge relatif compact
+        let now_secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default();
-        let then = std::time::Duration::from_secs(e.deleted_at as u64);
-        let rel = humantime::format_duration(now.saturating_sub(then)).to_string();
+            .unwrap_or_default()
+            .as_secs();
+        let rel = compact_age(now_secs.saturating_sub(e.deleted_at as u64));
         let k = kind_letter(e.kind);
+        let ico = kind_icon(e.kind);
         println!(
-            "{:7}  {}  ({})  {}  {} ({})",
+            "{:7}  {} {}  ({})  {}  {} ({})",
             id,
+            ico,
             k,
             absolute,
             base,
