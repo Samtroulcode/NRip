@@ -10,7 +10,7 @@ mod safety;
 mod ui;
 
 #[derive(Parser)]
-#[command(name = "nrip", version, about = "Safe rm with a graveyard")]
+#[command(name = "nrip", version, about = "Safe rm with a graveyard", color = clap::ColorChoice::Auto)]
 struct Cli {
     /// Files/dirs to remove (default action)
     #[arg(value_name = "PATHS", allow_hyphen_values = true)]
