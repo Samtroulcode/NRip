@@ -36,9 +36,8 @@ pub fn load_index() -> Result<Index> {
     let (idx, dir, _) = index_paths()?;
     fs::create_dir_all(&dir)?;
     let lockf = fs::File::create(lock_path(&dir)).context("create lock file")?;
-    let mut lock = RwLock::new(lockf); // garder la valeur
-    let _guard = lock.write().context("lock index for read")?;
-
+    let lock = RwLock::new(lockf);
+    let _guard = lock.read().context("lock index for read")?;
     if !idx.exists() {
         return Ok(Index::default());
     }
