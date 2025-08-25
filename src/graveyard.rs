@@ -11,23 +11,9 @@ use fs_err as fs;
 use std::ffi::OsString;
 
 use crate::fs_safemove::safe_move_unique;
-use crate::index::{load_index, save_index};
 use crate::safety::{SafetyCtx, guard_path};
 
 use crate::index; // pour appeler les shims
-
-const APP_DIR: &str = env!("CARGO_PKG_NAME");
-
-fn data_home() -> PathBuf {
-    if let Some(dir) = dirs::data_dir() {
-        dir
-    } else {
-        let home = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."));
-        home.join(".local").join("share")
-    }
-}
 
 fn display_id(e: &index::Entry) -> String {
     e.trashed_path
@@ -39,10 +25,7 @@ fn display_id(e: &index::Entry) -> String {
 }
 
 fn graveyard_dir() -> Result<PathBuf> {
-    let data = crate::paths::data_dir()?;
-    let gy = data.join(APP_DIR).join("graveyard");
-    fs::create_dir_all(&gy)?;
-    Ok(gy)
+    Ok(crate::paths::data_dir()?.join("graveyard"))
 }
 
 fn journal_path() -> Result<PathBuf> {
@@ -59,56 +42,47 @@ fn append_journal(line: &str) -> Result<()> {
 }
 
 pub fn resurrect(items: &[PathBuf]) -> Result<()> {
-    // items : chemins dans la graveyard (ou bien indices depuis l’index)
-    let mut idx = load_index()?;
-    for gy_path in items {
-        // Retrouver original dans l’index
-        if let Some(pos) = idx.items.iter().position(|e| e.trashed_path == *gy_path) {
-            let original = idx.items[pos].original_path.clone();
+    index::with_index_mut(|idx| {
+        for gy_path in items {
+            if let Some(pos) = idx.items.iter().position(|e| e.trashed_path == *gy_path) {
+                let original = idx.items[pos].original_path.clone();
 
-            append_journal(&format!(
-                "RESTORE_PENDING\t{}\t{}",
-                gy_path.display(),
-                original.display()
-            ))?;
-            // Créer le dossier parent si nécessaire (restauration)
-            if let Some(parent) = original.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            // move inverse (unique_name pas nécessaire ici → on veut retrouver le nom exact)
-            // mais s'il existe déjà, on refuse (éviter écrasement) :
-            if original.exists() {
-                anyhow::bail!("La cible existe déjà: {}", original.display());
-            }
+                append_journal(&format!(
+                    "RESTORE_PENDING\t{}\t{}",
+                    gy_path.display(),
+                    original.display()
+                ))?;
 
-            // Implémentation simple : essayer rename, sinon fallback copy+unlink
-            match fs::rename(gy_path, &original) {
-                Ok(()) => {}
-                Err(e) if super::fs_safemove::is_exdev(&e) => {
-                    super::fs_safemove::copy_recursively(gy_path, &original)?;
-                    super::fs_safemove::remove_recursively(gy_path)?;
+                if let Some(parent) = original.parent() {
+                    fs::create_dir_all(parent)?;
                 }
-                Err(e) => {
-                    return Err(e).with_context(|| {
-                        format!("rename {} -> {}", gy_path.display(), original.display())
-                    });
+                if original.exists() {
+                    anyhow::bail!("La cible existe déjà: {}", original.display());
                 }
-            }
 
-            append_journal(&format!(
-                "RESTORE_DONE\t{}\t{}",
-                gy_path.display(),
-                original.display()
-            ))?;
-            idx.items.remove(pos);
-        } else {
-            // si pas d'entrée, on tente quand même la restauration best‑effort
-            // (utile après crash si l’index n’a pas été sync).
-            // Ici, on pourrait logguer/ignorer selon le choix de UX.
+                match fs::rename(gy_path, &original) {
+                    Ok(()) => {}
+                    Err(e) if super::fs_safemove::is_exdev(&e) => {
+                        super::fs_safemove::copy_recursively(gy_path, &original)?;
+                        super::fs_safemove::remove_recursively(gy_path)?;
+                    }
+                    Err(e) => {
+                        return Err(e).with_context(|| {
+                            format!("rename {} -> {}", gy_path.display(), original.display())
+                        });
+                    }
+                }
+
+                append_journal(&format!(
+                    "RESTORE_DONE\t{}\t{}",
+                    gy_path.display(),
+                    original.display()
+                ))?;
+                idx.items.remove(pos);
+            }
         }
-    }
-    save_index(&idx)?;
-    Ok(())
+        Ok(())
+    })
 }
 
 pub fn resurrect_cmd(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result<()> {
@@ -218,49 +192,42 @@ pub fn resurrect_cmd(target: Option<String>, dry_run: bool, yes: bool) -> anyhow
     Ok(())
 }
 
-pub fn bury(paths: &[PathBuf]) -> Result<()> {
+pub fn bury(paths: &[PathBuf], force: bool) -> Result<()> {
     let gy = graveyard_dir()?;
-    let mut idx = load_index()?;
-
     let ctx = SafetyCtx {
         graveyard: gy.clone(),
         preserve_root: true,
-        force: false,
+        force,
     };
 
-    for src in paths {
-        guard_path(src, &ctx)?; // <<--- REFUS IMMÉDIAT SI NECESSAIRE
-        // 1) Capture l’ABSOLU LOGIQUE AVANT le move (ne résout pas les symlinks)
-        let original_abs =
-            path::absolute(src).with_context(|| format!("absolutize {}", src.display()))?;
+    index::with_index_mut(|idx| {
+        for src in paths {
+            guard_path(src, &ctx)?;
+            let original_abs =
+                path::absolute(src).with_context(|| format!("absolutize {}", src.display()))?;
+            let base: OsString = src.file_name().unwrap_or_default().to_os_string();
 
-        // 2) Journal: garde la trace claire
-        let base: OsString = src.file_name().unwrap_or_default().to_os_string();
-        append_journal(&format!(
-            "PENDING\t{}\t{}",
-            original_abs.display(),
-            base.to_string_lossy()
-        ))?;
+            append_journal(&format!(
+                "PENDING\t{}\t{}",
+                original_abs.display(),
+                base.to_string_lossy()
+            ))?;
+            let dst = safe_move_unique(src, &gy, &base)
+                .with_context(|| format!("move {} -> graveyard", src.display()))?;
+            append_journal(&format!(
+                "DONE\t{}\t{}",
+                original_abs.display(),
+                dst.display()
+            ))?;
 
-        // 3) Move vers le graveyard
-        let dst = safe_move_unique(src, &gy, &base)
-            .with_context(|| format!("move {} -> graveyard", src.display()))?;
-        append_journal(&format!(
-            "DONE\t{}\t{}",
-            original_abs.display(),
-            dst.display()
-        ))?;
-
-        // 4) Indexe avec le chemin ABSOLU
-        idx.items.push(Entry {
-            original_path: original_abs,
-            trashed_path: dst.clone(),
-            deleted_at: Utc::now().timestamp(),
-        });
-    }
-
-    save_index(&idx)?;
-    Ok(())
+            idx.items.push(Entry {
+                original_path: original_abs,
+                trashed_path: dst,
+                deleted_at: Utc::now().timestamp(),
+            });
+        }
+        Ok(())
+    })
 }
 
 pub fn list() -> anyhow::Result<()> {
@@ -281,13 +248,18 @@ pub fn list() -> anyhow::Result<()> {
 
 /// `prune` sans cible = vider tout ; avec cible = supprimer les matches.
 pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result<()> {
-    let mut entries = index::load_entries().unwrap_or_default();
+    // --- 1) SNAPSHOT & SÉLECTION (hors verrou) ---
+    let snap = index::load_index()?; // snapshot
+    if snap.items.is_empty() {
+        println!("Graveyard is empty.");
+        return Ok(());
+    }
 
-    // 1) Construire la liste à supprimer (to_delete)
+    // Construire la sélection "to_delete" depuis le snapshot
     let to_delete: Vec<index::Entry> = if let Some(ref q0) = target {
         let q = q0.to_lowercase();
-
-        let matches: Vec<index::Entry> = entries
+        let matches: Vec<index::Entry> = snap
+            .items
             .iter()
             .cloned()
             .filter(|e| {
@@ -311,26 +283,22 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
         }
         matches
     } else {
-        // --- MODE INTERACTIF (fzf) ---
-        let idx = index::load_index()?;
-        if idx.items.is_empty() {
-            println!("Graveyard is empty.");
-            return Ok(());
-        }
-
-        let picks = crate::ui::pick_entries_with_fzf(&idx, /*preview=*/ false)?;
+        // Interactif (fzf) sur le snapshot
+        let picks = crate::ui::pick_entries_with_fzf(&snap, /*preview=*/ false)?;
         if picks.is_empty() {
             println!("Aborted.");
             return Ok(());
         }
-
-        let to_delete: Vec<index::Entry> =
-            picks.into_iter().map(|i| idx.items[i].clone()).collect();
-
-        to_delete
+        picks.into_iter().map(|i| snap.items[i].clone()).collect()
     };
 
-    // 2) Bilan et confirmations
+    // Rien ?
+    if to_delete.is_empty() {
+        println!("Nothing to delete.");
+        return Ok(());
+    }
+
+    // Bilan (hors verrou)
     let mut total_bytes: u64 = 0;
     for e in &to_delete {
         if let Ok(meta) = fs::metadata(&e.trashed_path) {
@@ -339,7 +307,7 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
     }
     let mb = (total_bytes as f64) / (1024.0 * 1024.0);
 
-    let is_all = to_delete.len() == entries.len();
+    let is_all = to_delete.len() == snap.items.len();
     if is_all {
         println!(
             "About to remove ALL graveyard items: {} items (~{:.2} MiB)",
@@ -382,50 +350,71 @@ pub fn prune(target: Option<String>, dry_run: bool, yes: bool) -> anyhow::Result
         }
     }
 
-    // 3) Suppression des fichiers/dirs
-    let mut removed = 0usize;
-    for e in &to_delete {
-        let p: &Path = &e.trashed_path;
-        let res = if p.is_dir() {
-            fs::remove_dir_all(p)
-        } else {
-            fs::remove_file(p).or_else(|err| {
-                if err.kind() == std::io::ErrorKind::IsADirectory {
+    // --- 2) COMMIT ATOMIQUE (sous verrou unique) ---
+    let set: HashSet<PathBuf> = to_delete.iter().map(|e| e.trashed_path.clone()).collect();
+
+    let removed = index::with_index_mut(|idx| {
+        // Revalide la sélection côté index courant (au cas où ça a bougé)
+        let mut remaining: Vec<Entry> = Vec::with_capacity(idx.items.len());
+        let mut removed_count = 0usize;
+
+        for e in idx.items.drain(..) {
+            if set.contains(&e.trashed_path) {
+                // Supprimer la cible (fichier/dir)
+                let p = &e.trashed_path;
+                let res = if p.is_dir() {
                     fs::remove_dir_all(p)
                 } else {
-                    Err(err)
-                }
-            })
-        };
-        match res {
-            Ok(_) => removed += 1,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => removed += 1,
-            Err(err) => eprintln!("warn: cannot remove {}: {}", p.display(), err),
-        }
-    }
-
-    // 4) Mise à jour de l’index + nettoyage dossier
-    if is_all {
-        index::save_entries(&Vec::new())?;
-        let gy = graveyard_dir()?; // <— ta version renvoie Result<PathBuf>
-        if let Ok(rd) = fs::read_dir(&gy) {
-            for ent in rd.filter_map(|r| r.ok()) {
-                let p = ent.path();
-                let _ = if p.is_dir() {
-                    fs::remove_dir_all(&p)
-                } else {
-                    fs::remove_file(&p)
+                    fs::remove_file(p).or_else(|err| {
+                        if err.kind() == std::io::ErrorKind::IsADirectory {
+                            fs::remove_dir_all(p)
+                        } else {
+                            Err(err)
+                        }
+                    })
                 };
+                match res {
+                    Ok(_) => removed_count += 1,
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => removed_count += 1,
+                    Err(err) => {
+                        eprintln!("warn: cannot remove {}: {}", p.display(), err);
+                        // Échec : on conserve l’entrée
+                        remaining.push(e);
+                        continue;
+                    }
+                }
+                // Succès → on ne remet pas l'entrée (deleted)
+            } else {
+                remaining.push(e);
             }
         }
-    } else {
-        let delete_set: HashSet<PathBuf> =
-            to_delete.iter().map(|e| e.trashed_path.clone()).collect();
-        entries.retain(|e| !delete_set.contains(&e.trashed_path));
-        index::save_entries(&entries)?;
-    }
 
-    println!("Removed {} item(s).", removed);
+        // Si la sélection couvrait "tout", on peut en plus nettoyer les résidus
+        // du graveyard sans toucher aux méta (.journal/.index.lock)
+        if is_all {
+            let gy = crate::paths::data_dir()?.join("graveyard");
+            if let Ok(rd) = fs::read_dir(&gy) {
+                for ent in rd.filter_map(|r| r.ok()) {
+                    let p = ent.path();
+                    let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                    if name == ".journal" || name == ".index.lock" {
+                        continue;
+                    }
+                    let _ = if p.is_dir() {
+                        fs::remove_dir_all(&p)
+                    } else {
+                        fs::remove_file(&p)
+                    };
+                }
+            }
+            remaining.clear(); // au cas où
+        }
+
+        idx.items = remaining;
+        Ok(removed_count)
+    })?;
+
+    println!("Removed {removed} item(s).");
     Ok(())
 }
 
