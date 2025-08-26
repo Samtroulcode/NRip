@@ -1,6 +1,6 @@
 # NRip
 
-> **neo rip** — a safe replacement for `rm` that sends your files to the **graveyard**. Bury now, decide later. If you like living dangerously, there’s always the crematorium.
+> **neo rip** — a safe and modern replacement for `rm` that sends your files to the **graveyard**. Bury now, decide later. If you like living dangerously, there’s always the crematorium.
 
 <p align="center">
   <img src="assets/img/tombstone.svg" width="120" alt="NRip tombstone"/>
