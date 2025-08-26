@@ -32,7 +32,7 @@ NRip moves files/dirs to a **graveyard** instead of deleting them. You can then 
 
 ## Gloomy tour (demo)
 
-  ![Resurrect demo](assets/gifs/demo.svg)
+  ![Resurrect demo](assets/gifs/demo1.svg)
 
 ---
 
