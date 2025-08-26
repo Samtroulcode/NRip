@@ -124,8 +124,6 @@ nrip -c --dry-run     # simulate
 nrip -c -y            # no prompts (the quick burn)
 ```
 
-> `--prune` remains available as a compatibility alias.
-
 **Resurrect (restore)**
 
 ```bash
@@ -143,7 +141,7 @@ nrip -r -y            # raise without confirmation
 
 ## Shell completion
 
-Hidden completion endpoint: `nrip --__complete <context> <prefix>` where `<context>` is `cremate|prune` or `resurrect`.
+Hidden completion endpoint: `nrip --__complete <context> <prefix>` where `<context>` is `cremate` or `resurrect`.
 
 ### Zsh
 
@@ -154,8 +152,8 @@ _nrip_complete() {
   cur=${words[-1]}
   prev=${words[-2]}
 
-  if [[ $prev == "-c" || $prev == "--cremate" || $prev == "--prune" ]]; then
-    compadd -- ${(f)"$(nrip --__complete prune "$cur")"}
+  if [[ $prev == "-c" || $prev == "--cremate" ]]; then
+    compadd -- ${(f)"$(nrip --__complete cremate "$cur")"}
     return 0
   elif [[ $prev == "-r" || $prev == "--resurrect" ]]; then
     compadd -- ${(f)"$(nrip --__complete resurrect "$cur")"}
@@ -176,8 +174,8 @@ _nrip_complete() {
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-  if [[ "$prev" == "-c" || "$prev" == "--cremate" || "$prev" == "--prune" ]]; then
-    mapfile -t COMPREPLY < <(nrip --__complete prune "$cur")
+  if [[ "$prev" == "-c" || "$prev" == "--cremate" ]]; then
+    mapfile -t COMPREPLY < <(nrip --__complete cremate "$cur")
   elif [[ "$prev" == "-r" || "$prev" == "--resurrect" ]]; then
     mapfile -t COMPREPLY < <(nrip --__complete resurrect "$cur")
   fi
